@@ -1,0 +1,1880 @@
+import { useState, useEffect, useRef, useMemo } from “react”;
+
+/* ─────────────────────────────────────────────────────────────────
+GLOBAL CSS
+───────────────────────────────────────────────────────────────── */
+const CSS = `
+@import url(‘https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap’);
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+–bg:#07090f;
+–s0:#0d1117;–s1:#111722;–s2:#161e2e;–s3:#1c2640;–s4:#212e4a;
+–b0:rgba(255,255,255,0.04);–b1:rgba(255,255,255,0.08);–b2:rgba(255,255,255,0.14);
+–t0:#eef2ff;–t1:#b8c4e8;–t2:#5c6f9a;–t3:#2e3a58;
+–blue:#3b7ef8;–blue2:#1d5ee0;–teal:#0fb8a0;–red:#e85555;
+–amber:#e8993a;–violet:#7b5cf5;–slate:#4a7fa5;
+–nav:240px;
+–r:12px;
+–font:‘Plus Jakarta Sans’,sans-serif;
+–mono:‘IBM Plex Mono’,monospace;
+}
+html,body{background:var(–bg);color:var(–t1);font-family:var(–font);min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:3px;height:3px}
+::-webkit-scrollbar-thumb{background:var(–s4);border-radius:99px}
+input,select,textarea{
+font-family:var(–font);background:var(–s0);border:1px solid var(–b1);
+border-radius:8px;color:var(–t0);padding:9px 12px;font-size:13px;
+width:100%;outline:none;transition:border-color .18s,box-shadow .18s
+}
+input:focus,select:focus,textarea:focus{border-color:var(–blue);box-shadow:0 0 0 3px rgba(59,126,248,.14)}
+input::placeholder,textarea::placeholder{color:var(–t3)}
+select option{background:var(–s2);color:var(–t0)}
+button{font-family:var(–font);cursor:pointer;transition:all .15s}
+table{border-collapse:collapse;width:100%}
+@keyframes up{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.5)}}
+.au{animation:up .28s ease both}
+.au1{animation:up .28s .04s ease both}
+.au2{animation:up .28s .08s ease both}
+.au3{animation:up .28s .12s ease both}
+.au4{animation:up .28s .16s ease both}
+.au5{animation:up .28s .20s ease both}
+
+/* ── FIX: overflow on all cards/blocks ── */
+.card-inner{min-width:0;overflow:hidden}
+.txt-clip{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.txt-wrap{word-break:break-word;overflow-wrap:anywhere;min-width:0}
+.num-cell{font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* ── MOBILE ── */
+@media(max-width:768px){
+:root{–nav:0px}
+#sidebar{display:none!important}
+#mob-nav{display:flex!important}
+#mob-bar{display:flex!important}
+#main{padding:14px 12px 88px!important;padding-top:66px!important;max-width:100vw!important;overflow-x:hidden!important}
+.mob-col{grid-template-columns:1fr!important}
+.mob-hide{display:none!important}
+.client-card-actions{display:none!important}
+}
+@media(min-width:769px){
+#mob-nav,#mob-bar{display:none!important}
+}
+
+/* ── PRINT ── */
+@media print{
+html,body{background:#fff!important;margin:0!important;padding:0!important;
+-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+/* Hide entire app */
+#app-bg,#app-shell,#print-doc{display:none!important}
+/* Show ONLY the print overlay content */
+.print-overlay{position:static!important;background:transparent!important;
+backdrop-filter:none!important;padding:0!important;display:block!important}
+/* Hide toolbar inside overlay */
+.pbar{display:none!important}
+/* Show doc white */
+.pdoc-wrap{box-shadow:none!important;border-radius:0!important;max-width:100%!important;padding:20px 24px!important}
+}
+`;
+
+/* ─────────────────────────────────────────────────────────────────
+HELPERS
+───────────────────────────────────────────────────────────────── */
+const fn   = n => Number(n||0).toLocaleString(“ru-RU”);
+const f    = n => fn(n)+” ₸”;
+const fk   = n => n>=1e6?(n/1e6).toFixed(1)+“М ₸”:n>=1e3?Math.round(n/1e3)+“К ₸”:fn(n)+” ₸”;
+const uid  = () => Date.now()+Math.random().toString(36).slice(2,7);
+const pad  = n => String(n).padStart(4,“0”);
+const now  = () => new Date().toLocaleDateString(“ru-RU”);
+
+/* ─────────────────────────────────────────────────────────────────
+SEED DATA
+───────────────────────────────────────────────────────────────── */
+const CLIENTS0 = [
+{id:“c1”,name:“Салон Эстетика”,contact:“Айгуль Серикова”,phone:”+7 701 111 22 33”,seg:“Премиум”,addr:“пр. Туран, 14”,bin:“123456789012”,st:“active”,pay:“Отсрочка 14 дн”,source:“Холодный звонок”,created:“01.04.2026”,lastContact:“20.04.2026”,avg:85000,totalRev:360000,note:“VIP клиент, первоочередная доставка”,activities:[{date:“20.04.2026”,type:“call”,text:“Обсудили новый заказ на май”},{date:“15.04.2026”,type:“deal”,text:“Оплата за накладную #0001”}]},
+{id:“c2”,name:“Beauty Room”,contact:“Дана Нурланова”,phone:”+7 777 333 44 55”,seg:“Средний”,addr:“ул. Кошкарбаева, 5”,bin:””,st:“active”,pay:“Отсрочка 7 дн”,source:“Рекомендация”,created:“05.04.2026”,lastContact:“18.04.2026”,avg:45000,totalRev:135000,note:””,activities:[{date:“18.04.2026”,type:“visit”,text:“Презентация нового ассортимента”}]},
+{id:“c3”,name:“Магазин Профи”,contact:“Асет Жаксыбеков”,phone:”+7 702 555 66 77”,seg:“Магазин”,addr:“ТД Алтын, пав. 12”,bin:“987654321098”,st:“negotiation”,pay:“Предоплата”,source:“Выставка”,created:“10.04.2026”,lastContact:“22.04.2026”,avg:120000,totalRev:120000,note:“Ждёт образцы”,activities:[{date:“22.04.2026”,type:“meet”,text:“Встреча, обсудили условия поставки”},{date:“10.04.2026”,type:“call”,text:“Первый контакт”}]},
+{id:“c4”,name:“Парикмахерская Алия”,contact:“Алия Сейткали”,phone:”+7 705 888 99 00”,seg:“Эконом”,addr:“мкр Нурсая, 3”,bin:””,st:“potential”,pay:””,source:“Холодный визит”,created:“15.04.2026”,lastContact:””,avg:18000,totalRev:0,note:“Первый контакт, интересуется красителями”,activities:[{date:“15.04.2026”,type:“visit”,text:“Первый визит, оставили прайс”}]},
+{id:“c5”,name:“Studio Glam”,contact:“Мадина Касымова”,phone:”+7 708 222 33 11”,seg:“Премиум”,addr:“ул. Достык, 22”,bin:“111222333444”,st:“active”,pay:“Отсрочка 14 дн”,source:“Instagram”,created:“20.04.2026”,lastContact:“24.04.2026”,avg:67000,totalRev:201000,note:””,activities:[{date:“24.04.2026”,type:“deal”,text:“Оплата. Хочет расширить ассортимент”}]},
+];
+
+const PRODUCTS0 = [
+{id:“p1”,name:“Шампунь профессиональный 1л”,unit:“шт”,bp:1800,sp:2800,open:50,inc:100,exp:80,min:15},
+{id:“p2”,name:“Кондиционер восстанавливающий 1л”,unit:“шт”,bp:1600,sp:2500,open:30,inc:60,exp:45,min:15},
+{id:“p3”,name:“Маска для волос 500мл”,unit:“шт”,bp:2200,sp:3400,open:20,inc:40,exp:35,min:10},
+{id:“p4”,name:“Краска для волос набор”,unit:“шт”,bp:3500,sp:5200,open:15,inc:30,exp:22,min:8},
+{id:“p5”,name:“Сыворотка для волос 100мл”,unit:“шт”,bp:1200,sp:1900,open:40,inc:50,exp:60,min:15},
+{id:“p6”,name:“Шампунь глубокое очищение 1л”,unit:“шт”,bp:1900,sp:2900,open:25,inc:50,exp:30,min:10},
+{id:“p7”,name:“Спрей термозащита 250мл”,unit:“шт”,bp:1400,sp:2200,open:35,inc:40,exp:28,min:12},
+];
+
+const INVOICES0 = [
+{id:“i1”,num:“0001”,client:“c1”,date:“15.04.2026”,due:“29.04.2026”,items:[{pid:“p1”,name:“Шампунь профессиональный 1л”,qty:20,price:2800},{pid:“p2”,name:“Кондиционер восстанавливающий 1л”,qty:15,price:2500}],status:“paid”,paid:0,note:””,created:“15.04.2026”},
+{id:“i2”,num:“0002”,client:“c2”,date:“18.04.2026”,due:“25.04.2026”,items:[{pid:“p3”,name:“Маска для волос 500мл”,qty:10,price:3400},{pid:“p5”,name:“Сыворотка для волос 100мл”,qty:20,price:1900}],status:“partial”,paid:20000,note:””,created:“18.04.2026”},
+{id:“i3”,num:“0003”,client:“c3”,date:“20.04.2026”,due:“20.05.2026”,items:[{pid:“p4”,name:“Краска для волос набор”,qty:15,price:5200},{pid:“p1”,name:“Шампунь профессиональный 1л”,qty:10,price:2800}],status:“unpaid”,paid:0,note:””,created:“20.04.2026”},
+];
+
+const RECEIPTS0 = [
+{id:“r1”,num:“АПТ-0001”,date:“01.04.2026”,supplier:“ТОО Balyq Beauty Almaty”,items:[{pid:“p1”,name:“Шампунь профессиональный 1л”,qty:100,price:1800},{pid:“p2”,name:“Кондиционер восстанавливающий 1л”,qty:60,price:1600}],status:“posted”,note:“Основная поставка апреля”,created:“01.04.2026”},
+{id:“r2”,num:“АПТ-0002”,date:“10.04.2026”,supplier:“ТОО Balyq Beauty Almaty”,items:[{pid:“p3”,name:“Маска для волос 500мл”,qty:40,price:2200},{pid:“p4”,name:“Краска для волос набор”,qty:30,price:3500},{pid:“p5”,name:“Сыворотка для волос 100мл”,qty:50,price:1200}],status:“posted”,note:””,created:“10.04.2026”},
+];
+
+const ROUTES0 = [
+{id:“rt1”,day:“Пн”,time:“10:00”,client:“c1”,addr:“пр. Туран, 14”,goal:“Повторный заказ”,res:“done”,ord:92000,nxt:“07.05”,note:“VIP”},
+{id:“rt2”,day:“Пн”,time:“12:00”,client:“c2”,addr:“ул. Кошкарбаева, 5”,goal:“Забрать оплату”,res:“done”,ord:0,nxt:“14.05”,note:””},
+{id:“rt3”,day:“Вт”,time:“10:00”,client:“c4”,addr:“мкр Нурсая, 3”,goal:“Забрать долг”,res:“pending”,ord:0,nxt:“02.05”,note:“Напомнить”},
+{id:“rt4”,day:“Ср”,time:“11:00”,client:“c3”,addr:“ТД Алтын, пав. 12”,goal:“Презентация новинок”,res:“progress”,ord:0,nxt:“05.05”,note:“Выслать КП”},
+{id:“rt5”,day:“Пт”,time:“09:00”,client:“c5”,addr:“ул. Достык, 22”,goal:“Новый заказ”,res:“done”,ord:67000,nxt:“08.05”,note:””},
+];
+
+const PL0 = {
+revenue: [360000,480000,550000,620000,700000,780000],
+cogs:    [216000,288000,330000,372000,420000,468000],
+rent:    [80000,80000,80000,80000,80000,80000],
+logist:  [35000,40000,45000,45000,50000,50000],
+salrep:  [0,200000,200000,200000,200000,200000],
+fuel:    [25000,30000,30000,35000,35000,40000],
+comm:    [8000,8000,8000,8000,8000,8000],
+other:   [10000,10000,10000,10000,10000,10000],
+mysal:   [400000,400000,450000,450000,500000,500000],
+};
+
+const MONTHS = [“Апр”,“Май”,“Июн”,“Июл”,“Авг”,“Сен”];
+
+/* ─────────────────────────────────────────────────────────────────
+STATUS CONFIGS
+───────────────────────────────────────────────────────────────── */
+const CST = {
+active:      {label:“Активный”,   c:“var(–teal)”},
+potential:   {label:“Потенциал”,  c:“var(–blue)”},
+negotiation: {label:“Переговоры”, c:“var(–amber)”},
+pause:       {label:“Пауза”,      c:“var(–t2)”},
+lost:        {label:“Отказ”,      c:“var(–red)”},
+};
+const IST = {
+paid:    {label:“Оплачена”,   c:“var(–teal)”},
+partial: {label:“Частично”,  c:“var(–amber)”},
+unpaid:  {label:“Не оплачена”,c:“var(–red)”},
+overdue: {label:“Просрочена”, c:“var(–red)”},
+};
+const RST = {
+done:    {label:“Выполнен”,   c:“var(–teal)”},
+pending: {label:“Ожидание”,   c:“var(–amber)”},
+progress:{label:“В процессе”,c:“var(–blue)”},
+none:    {label:“Не проведён”,c:“var(–t3)”},
+};
+const ACT_TYPES = {
+call:  {label:“Звонок”,  c:“var(–blue)”},
+visit: {label:“Визит”,   c:“var(–violet)”},
+meet:  {label:“Встреча”, c:“var(–teal)”},
+deal:  {label:“Сделка”,  c:“var(–amber)”},
+note:  {label:“Заметка”, c:“var(–t2)”},
+};
+
+/* ─────────────────────────────────────────────────────────────────
+INVOICE MATH
+───────────────────────────────────────────────────────────────── */
+const invTotal = inv => (inv.items||[]).reduce((s,it)=>s+(it.qty||0)*(it.price||0),0);
+const invPaid  = inv => inv.status===“paid”?invTotal(inv):inv.status===“partial”?(inv.paid||0):0;
+const invDebt  = inv => invTotal(inv)-invPaid(inv);
+const rcpTotal = rc  => (rc.items||[]).reduce((s,it)=>s+(it.qty||0)*(it.price||0),0);
+
+/* ─────────────────────────────────────────────────────────────────
+ATOMS
+───────────────────────────────────────────────────────────────── */
+const Chip = ({children,c=“var(–blue)”,sm,dot}) => (
+<span style={{display:“inline-flex”,alignItems:“center”,gap:5,
+background:`${c}14`,color:c,border:`1px solid ${c}28`,
+borderRadius:6,padding:sm?“2px 8px”:“4px 11px”,
+fontSize:sm?10:11,fontWeight:600,letterSpacing:”.02em”,whiteSpace:“nowrap”}}>
+{dot&&<span style={{width:5,height:5,borderRadius:“50%”,background:c,flexShrink:0,
+animation:dot===“pulse”?“pulse 2s ease-in-out infinite”:“none”}}/>}
+{children}
+</span>
+);
+
+function Btn({children,v=“primary”,onClick,sm,icon,full,sx={},disabled,type=“button”}){
+const map={
+primary:{bg:“var(–blue)”,  color:”#fff”,    border:“none”},
+ghost:  {bg:“transparent”,  color:“var(–t1)”,border:“1px solid var(–b2)”},
+danger: {bg:“rgba(232,85,85,.1)”,color:“var(–red)”, border:“1px solid rgba(232,85,85,.25)”},
+teal:   {bg:“rgba(15,184,160,.1)”,color:“var(–teal)”,border:“1px solid rgba(15,184,160,.25)”},
+subtle: {bg:“var(–s2)”,    color:“var(–t1)”,border:“1px solid var(–b1)”},
+};
+const s=map[v]||map.primary;
+return(
+<button type={type} onClick={onClick} disabled={disabled} style={{
+display:“inline-flex”,alignItems:“center”,justifyContent:“center”,gap:6,
+background:s.bg,color:s.color,border:s.border,
+borderRadius:8,padding:sm?“6px 12px”:“9px 16px”,
+fontSize:sm?12:13,fontWeight:600,width:full?“100%”:“auto”,
+opacity:disabled?.45:1,…sx}}
+onMouseEnter={e=>{if(!disabled)e.currentTarget.style.filter=“brightness(1.12)”}}
+onMouseLeave={e=>{e.currentTarget.style.filter=“none”}}>
+{icon&&<SVG n={icon} s={sm?13:15}/>}{children}
+</button>
+);
+}
+
+const Card = ({children,sx={},cls=””}) => (
+
+  <div className={cls} style={{background:"var(--s1)",border:"1px solid var(--b0)",borderRadius:"var(--r)",...sx}}>
+    {children}
+  </div>
+);
+
+const Divider = () => <div style={{height:1,background:“var(–b0)”,margin:“0”}} />;
+
+const Bar = ({pct,c=“var(–blue)”,h=4}) => (
+
+  <div style={{background:"var(--s3)",borderRadius:99,height:h,overflow:"hidden"}}>
+    <div style={{width:`${Math.min(100,Math.max(0,pct||0))}%`,height:"100%",background:c,borderRadius:99,transition:"width .5s ease"}}/>
+  </div>
+);
+
+function Sparkline({data=[],c=“var(–blue)”,h=32,w=100}){
+if(data.length<2)return null;
+const d=data.map(Number).filter(v=>!isNaN(v));
+const mn=Math.min(…d),mx=Math.max(…d),r=mx-mn||1;
+const pts=d.map((v,i)=>`${(i/(d.length-1))*w},${h-((v-mn)/r)*(h-4)-2}`).join(” “);
+const id=`sg${Math.abs(c.hashCode?.()??c.length??0)}`;
+return(
+<svg width={w} height={h} style={{display:“block”,overflow:“visible”}}>
+<polygon fill={`${c}20`} points={`0,${h} ${pts} ${w},${h}`}/>
+<polyline fill="none" stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" points={pts}/>
+</svg>
+);
+}
+
+/* ─────────────────────────────────────────────────────────────────
+SVG ICON SYSTEM (no emojis)
+───────────────────────────────────────────────────────────────── */
+const ICONS = {
+dashboard:“M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z||M9 22V12h6v10”,
+clients:“M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2||M23 21v-2a4 4 0 00-3-3.87||M16 3.13a4 4 0 010 7.75”,
+stock:“M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z||M3.27 6.96L12 12.01l8.73-5.05||M12 22.08V12”,
+invoices:“M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z||M14 2v6h6||M16 13H8||M16 17H8||M10 9H8”,
+receipts:“M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2||M9 5a2 2 0 002 2h2a2 2 0 002-2||M9 5a2 2 0 012-2h2a2 2 0 012 2||M12 12v6||M9 15h6”,
+routes:“M3 12h18||M3 6h18||M3 18h18”,
+pl:“M18 20V10||M12 20V4||M6 20v-6”,
+report:“M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z||M14 2v6h6”,
+plus:“M12 5v14||M5 12h14”,
+edit:“M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7||M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4z”,
+trash:“M3 6h18||M8 6V4h8v2||M19 6l-1 14H6L5 6”,
+x:“M18 6L6 18||M6 6l12 12”,
+check:“M20 6L9 17l-5-5”,
+search:“M11 19a8 8 0 100-16 8 8 0 000 16z||M21 21l-4.35-4.35”,
+phone:“M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.8 19.79 19.79 0 01.01 1.18 2 2 0 012 .01h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 13.92z”,
+map:“M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z||M12 10a2 2 0 100-4 2 2 0 000 4”,
+arrow_r:“M5 12h14||M12 5l7 7-7 7”,
+eye:“M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z||M12 9a3 3 0 100 6 3 3 0 000-6”,
+activity:“M22 12h-4l-3 9L9 3l-3 9H2”,
+print:“M6 9V2h12v7||M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2||M6 14h12v8H6z”,
+truck:“M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h11v14M9 17h6m4 0h2v-6.34a4 4 0 00-1.17-2.83L17 5h-3v12m0-6a2 2 0 11-4 0 2 2 0 014 0zm10 6a2 2 0 11-4 0 2 2 0 014 0z”,
+user:“M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2||M12 3a4 4 0 100 8 4 4 0 000-8”,
+alert:“M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z||M12 9v4||M12 17h.01”,
+filter:“M22 3H2l8 9.46V19l4 2v-8.54L22 3”,
+close_eye:“M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94||M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19||M1 1l22 22”,
+layers:“M12 2L2 7l10 5 10-5-10-5z||M2 17l10 5 10-5||M2 12l10 5 10-5”,
+};
+
+function SVG({n,s=16,c=“currentColor”}){
+const d=ICONS[n]||ICONS.plus;
+return(
+<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c}
+strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
+{d.split(”||”).map((p,i)=><path key={i} d={p}/>)}
+</svg>
+);
+}
+
+/* ─────────────────────────────────────────────────────────────────
+MODAL
+───────────────────────────────────────────────────────────────── */
+function Modal({title,onClose,children,wide,full}){
+useEffect(()=>{document.body.style.overflow=“hidden”;return()=>{document.body.style.overflow=””};},[]);
+return(
+<div style={{position:“fixed”,inset:0,zIndex:900,display:“flex”,alignItems:“center”,
+justifyContent:“center”,background:“rgba(7,9,15,.9)”,backdropFilter:“blur(12px)”,padding:16}}>
+<div className=“au” style={{background:“var(–s1)”,border:“1px solid var(–b1)”,
+borderRadius:16,padding:“26px 28px 24px”,width:“100%”,
+maxWidth:full?900:wide?660:520,maxHeight:“94vh”,overflowY:“auto”,
+boxShadow:“0 32px 72px rgba(0,0,0,.65)”}}>
+<div style={{display:“flex”,justifyContent:“space-between”,alignItems:“center”,marginBottom:22}}>
+<h3 style={{fontSize:16,fontWeight:700,color:“var(–t0)”,letterSpacing:”-.02em”}}>{title}</h3>
+<button onClick={onClose} style={{background:“var(–s3)”,border:“none”,color:“var(–t2)”,
+borderRadius:8,width:30,height:30,cursor:“pointer”,display:“flex”,alignItems:“center”,
+justifyContent:“center”}}><SVG n="x" s={14}/></button>
+</div>
+{children}
+</div>
+</div>
+);
+}
+
+const FG  = ({children,cols=2}) => <div style={{display:“grid”,gridTemplateColumns:`repeat(auto-fill,minmax(min(220px,100%),1fr))`,gap:“12px 16px”,marginBottom:16}}>{children}</div>;
+const FL  = ({label,full,children}) => (
+
+  <div style={{gridColumn:full?"1 / -1":"span 1"}}>
+    <label style={{display:"block",fontSize:11,fontWeight:600,color:"var(--t2)",textTransform:"uppercase",letterSpacing:".05em",marginBottom:5}}>{label}</label>
+    {children}
+  </div>
+);
+const SaveRow = ({onClose,onSave,label="Сохранить"}) => (
+  <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:6}}>
+    <Btn v="ghost" onClick={onClose}>Отмена</Btn>
+    <Btn onClick={onSave}>{label}</Btn>
+  </div>
+);
+
+/* ─────────────────────────────────────────────────────────────────
+PAGE HEADER
+───────────────────────────────────────────────────────────────── */
+const PageHead = ({title,sub,right}) => (
+
+  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",
+    marginBottom:24,gap:12,flexWrap:"wrap"}}>
+    <div>
+      <h2 style={{fontSize:20,fontWeight:700,color:"var(--t0)",letterSpacing:"-.025em"}}>{title}</h2>
+      {sub&&<p style={{color:"var(--t2)",fontSize:12,marginTop:3}}>{sub}</p>}
+    </div>
+    {right&&<div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>{right}</div>}
+  </div>
+);
+
+/* ─────────────────────────────────────────────────────────────────
+STAT CARD
+───────────────────────────────────────────────────────────────── */
+const Stat = ({label,value,sub,c=“var(–blue)”,trend,data,cls=””}) => (
+<Card cls={cls} sx={{padding:20,position:“relative”,overflow:“hidden”}}>
+<div style={{position:“absolute”,inset:0,background:`radial-gradient(120px circle at 110% -10%,${c}12,transparent)`,pointerEvents:“none”}}/>
+<div style={{fontSize:11,fontWeight:600,color:“var(–t2)”,textTransform:“uppercase”,letterSpacing:”.05em”,marginBottom:6}}>{label}</div>
+<div style={{fontSize:24,fontWeight:800,color:c,letterSpacing:”-.035em”,lineHeight:1,fontVariantNumeric:“tabular-nums”,fontFamily:“var(–mono)”}}>{value}</div>
+<div style={{display:“flex”,justifyContent:“space-between”,alignItems:“flex-end”,marginTop:10}}>
+<div style={{fontSize:11,color:“var(–t3)”}}>{sub}</div>
+{data&&<Sparkline data={data} c={c}/>}
+</div>
+</Card>
+);
+
+/* ─────────────────────────────────────────────────────────────────
+DASHBOARD
+───────────────────────────────────────────────────────────────── */
+function Dashboard({clients,products,invoices,routes,receipts}){
+const rev      = invoices.reduce((s,x)=>s+invTotal(x),0);
+const collected= invoices.reduce((s,x)=>s+invPaid(x),0);
+const debt     = rev-collected;
+const lowSt    = products.filter(p=>(p.open+p.inc-p.exp)<=p.min).length;
+const wkOrd    = routes.reduce((s,r)=>s+r.ord,0);
+const activeC  = clients.filter(c=>c.st===“active”).length;
+
+const recentInv = […invoices].reverse().slice(0,4);
+const pipeline  = Object.entries(CST).map(([k,v])=>({…v,key:k,count:clients.filter(c=>c.st===k).length})).filter(x=>x.count);
+const lowItems  = products.filter(p=>(p.open+p.inc-p.exp)<=p.min);
+
+return(
+<div>
+<div className="au" style={{marginBottom:28}}>
+<div style={{display:“flex”,alignItems:“center”,gap:8,marginBottom:6}}>
+<span style={{width:6,height:6,borderRadius:“50%”,background:“var(–teal)”,
+display:“inline-block”,animation:“pulse 2s ease-in-out infinite”,boxShadow:“0 0 6px var(–teal)”}}/>
+<span style={{fontSize:11,fontWeight:600,color:“var(–teal)”,letterSpacing:”.08em”,textTransform:“uppercase”}}>Астана · Апрель 2026</span>
+</div>
+<h1 style={{fontSize:26,fontWeight:800,color:“var(–t0)”,letterSpacing:”-.04em”,lineHeight:1}}>Панель управления</h1>
+<p style={{color:“var(–t2)”,fontSize:13,marginTop:4}}>Дистрибьюция — Елнур</p>
+</div>
+
+```
+  <div className="au1" style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:12,marginBottom:20}}>
+    <Stat label="Отгружено"      value={fk(rev)}       sub={`${invoices.length} накладных`}   c="var(--blue)"   data={[180,240,310,360]}/>
+    <Stat label="Собрано"        value={fk(collected)}  sub={`${Math.round(collected/rev*100||0)}% оплачено`}  c="var(--teal)"  data={[80,140,220,300]}/>
+    <Stat label="Дебиторка"      value={fk(debt)}       sub="к получению"                     c="var(--amber)"  data={[200,180,150,debt/1000]}/>
+    <Stat label="Клиенты"        value={activeC}        sub={`из ${clients.length} в базе`}   c="var(--violet)" data={[2,3,4,activeC]}/>
+    <Stat label="Заказы / нед."  value={fk(wkOrd)}      sub={`${routes.filter(r=>r.res==="done").length} выполнено`} c="var(--slate)" data={[40,80,110,wkOrd/1000]}/>
+    {lowSt>0&&<Stat label="Склад — заказать" value={lowSt+" поз."} sub="ниже минимума" c="var(--red)" data={[0,0,lowSt,lowSt]}/>}
+  </div>
+
+  <div className="au2" style={{display:"grid",gridTemplateColumns:"clamp(280px,50%,1fr) 1fr",gap:14}}>
+    {/* Recent invoices */}
+    <Card>
+      <div style={{padding:"16px 18px",borderBottom:"1px solid var(--b0)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <span style={{fontSize:13,fontWeight:600,color:"var(--t0)"}}>Последние накладные</span>
+      </div>
+      {recentInv.map((inv,i)=>{
+        const cl=clients.find(c=>c.id===inv.client);
+        const sc=IST[inv.status]||IST.unpaid;
+        return(
+          <div key={inv.id} style={{padding:"12px 18px",borderBottom:i<recentInv.length-1?"1px solid var(--b0)":"none",
+            display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div>
+              <div style={{fontSize:12,fontWeight:600,color:"var(--t0)"}}>
+                <span style={{color:"var(--t2)",fontFamily:"var(--mono)",fontSize:11}}>#{inv.num}</span> · {cl?.name||inv.client}
+              </div>
+              <div style={{fontSize:11,color:"var(--t3)",marginTop:1}}>{inv.date}</div>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <Chip c={sc.c} sm>{sc.label}</Chip>
+              <span style={{fontSize:13,fontWeight:700,color:"var(--t0)",fontFamily:"var(--mono)"}}>{fn(invTotal(inv))} ₸</span>
+            </div>
+          </div>
+        );
+      })}
+    </Card>
+
+    {/* Pipeline */}
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      <Card sx={{padding:18}}>
+        <div style={{fontSize:12,fontWeight:600,color:"var(--t2)",textTransform:"uppercase",letterSpacing:".05em",marginBottom:14}}>Воронка клиентов</div>
+        {pipeline.map(s=>(
+          <div key={s.key} style={{marginBottom:10}}>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:5}}>
+              <span style={{color:"var(--t1)"}}>{s.label}</span>
+              <span style={{fontWeight:700,color:s.c,fontFamily:"var(--mono)"}}>{s.count}</span>
+            </div>
+            <Bar pct={s.count/clients.length*100} c={s.c}/>
+          </div>
+        ))}
+      </Card>
+      {lowItems.length>0&&(
+        <Card sx={{padding:18,borderColor:"rgba(232,85,85,.25)"}}>
+          <div style={{fontSize:12,fontWeight:600,color:"var(--red)",marginBottom:12,display:"flex",alignItems:"center",gap:6}}>
+            <SVG n="alert" s={14} c="var(--red)"/>
+            Требуют заказа
+          </div>
+          {lowItems.map(p=>{
+            const rem=p.open+p.inc-p.exp;
+            return(
+              <div key={p.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+                padding:"6px 0",borderBottom:"1px solid var(--b0)",fontSize:12}}>
+                <span style={{color:"var(--t1)"}}>{p.name}</span>
+                <span style={{color:"var(--red)",fontWeight:700,fontFamily:"var(--mono)"}}>{rem} / {p.min} мин</span>
+              </div>
+            );
+          })}
+        </Card>
+      )}
+    </div>
+  </div>
+</div>
+```
+
+);
+}
+
+/* ─────────────────────────────────────────────────────────────────
+CRM — CLIENTS
+───────────────────────────────────────────────────────────────── */
+function Clients({clients,setClients,invoices}){
+const [view,setView]   = useState(“list”); // list | detail
+const [sel,setSel]     = useState(null);
+const [modal,setModal] = useState(null);
+const [actModal,setActModal] = useState(null);
+const [form,setForm]   = useState({});
+const [actForm,setActForm]  = useState({type:“call”,text:””});
+const [filter,setFilter]    = useState(“all”);
+const [search,setSearch]    = useState(””);
+const F = v => setForm(p=>({…p,…v}));
+
+const list = clients.filter(c=>
+(filter===“all”||c.st===filter)&&
+(c.name+c.contact+c.seg).toLowerCase().includes(search.toLowerCase())
+);
+
+const save=()=>{
+const item={…form,avg:+form.avg||0,activities:form.activities||[]};
+if(modal===“add”)setClients(p=>[…p,{…item,id:uid(),created:now(),activities:[],totalRev:0}]);
+else setClients(p=>p.map(c=>c.id===modal.id?{…item,id:c.id}:c));
+setModal(null);
+};
+
+const saveActivity=()=>{
+if(!sel||!actForm.text)return;
+setClients(p=>p.map(c=>c.id===sel.id?{…c,activities:[{…actForm,date:now()},…(c.activities||[])],lastContact:now()}:c));
+setSel(p=>({…p,activities:[{…actForm,date:now()},…(p.activities||[])],lastContact:now()}));
+setActModal(null);
+setActForm({type:“call”,text:””});
+};
+
+const del=id=>{if(confirm(“Удалить клиента?”))setClients(p=>p.filter(c=>c.id!==id))};
+
+const clientInvoices=id=>invoices.filter(inv=>inv.client===id);
+
+if(view===“detail”&&sel){
+const c=clients.find(x=>x.id===sel.id)||sel;
+const sc=CST[c.st]||CST.potential;
+const ci=clientInvoices(c.id);
+const totRev=ci.reduce((s,x)=>s+invTotal(x),0);
+const totDebt=ci.reduce((s,x)=>s+invDebt(x),0);
+return(
+<div>
+<div style={{display:“flex”,alignItems:“center”,gap:10,marginBottom:24}}>
+<Btn v=“ghost” onClick={()=>setView(“list”)} icon=“arrow_r” sx={{transform:“rotate(180deg)”}}>Назад</Btn>
+<div style={{flex:1}}>
+<div style={{fontSize:18,fontWeight:700,color:“var(–t0)”}}>{c.name}</div>
+<Chip c={sc.c}>{sc.label}</Chip>
+</div>
+<Btn v=“ghost” onClick={()=>{setForm({…c});setModal(c)}} icon=“edit” sm>Редактировать</Btn>
+</div>
+
+```
+    <div style={{display:"grid",gridTemplateColumns:"minmax(0,2fr) minmax(0,1fr)",gap:14,flexWrap:"wrap"}}
+      className="mob-col">
+      <div>
+        {/* Info */}
+        <Card sx={{marginBottom:14}}>
+          <div style={{padding:"14px 18px",borderBottom:"1px solid var(--b0)",fontSize:12,fontWeight:600,color:"var(--t2)",textTransform:"uppercase",letterSpacing:".05em"}}>Информация о клиенте</div>
+          <div style={{padding:"16px 18px",display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:"10px 24px"}}>
+            {[["Контакт",c.contact],["Телефон",c.phone],["Сегмент",c.seg],["Адрес",c.addr],
+              ["Условия оплаты",c.pay||"—"],["Источник",c.source||"—"],["БИН/ИИН",c.bin||"—"],
+              ["Первый контакт",c.created],["Последний контакт",c.lastContact||"—"]
+            ].map(([l,v])=>(
+              <div key={l}>
+                <div style={{fontSize:10,fontWeight:600,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".05em",marginBottom:3}}>{l}</div>
+                <div style={{fontSize:13,color:"var(--t0)",fontWeight:500}}>{v}</div>
+              </div>
+            ))}
+          </div>
+          {c.note&&<div style={{padding:"12px 18px",borderTop:"1px solid var(--b0)",fontSize:12,color:"var(--amber)"}}>{c.note}</div>}
+        </Card>
+
+        {/* Activity feed */}
+        <Card>
+          <div style={{padding:"14px 18px",borderBottom:"1px solid var(--b0)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span style={{fontSize:12,fontWeight:600,color:"var(--t2)",textTransform:"uppercase",letterSpacing:".05em"}}>История активности</span>
+            <Btn v="subtle" sm icon="plus" onClick={()=>setActModal(true)}>Добавить</Btn>
+          </div>
+          <div style={{padding:"12px 18px"}}>
+            {(c.activities||[]).length===0&&<div style={{fontSize:12,color:"var(--t3)",textAlign:"center",padding:"16px 0"}}>Активность не найдена</div>}
+            {(c.activities||[]).map((a,i)=>{
+              const at=ACT_TYPES[a.type]||ACT_TYPES.note;
+              return(
+                <div key={i} style={{display:"flex",gap:12,paddingBottom:14,
+                  borderLeft:`2px solid ${at.c}40`,paddingLeft:14,marginLeft:4,
+                  borderBottom:i<c.activities.length-1?"1px solid var(--b0)":"none",paddingTop:i>0?14:0}}>
+                  <div style={{width:28,height:28,borderRadius:"50%",background:`${at.c}15`,
+                    border:`1px solid ${at.c}30`,display:"flex",alignItems:"center",
+                    justifyContent:"center",flexShrink:0,marginLeft:-22}}>
+                    <SVG n={a.type==="call"?"phone":a.type==="visit"||a.type==="meet"?"user":"activity"} s={12} c={at.c}/>
+                  </div>
+                  <div style={{flex:1}}>
+                    <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:3}}>
+                      <Chip c={at.c} sm>{at.label}</Chip>
+                      <span style={{fontSize:10,color:"var(--t3)"}}>{a.date}</span>
+                    </div>
+                    <div style={{fontSize:12,color:"var(--t1)"}}>{a.text}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      </div>
+
+      {/* Right panel */}
+      <div>
+        <Card sx={{marginBottom:14,padding:18}}>
+          <div style={{fontSize:12,fontWeight:600,color:"var(--t2)",textTransform:"uppercase",letterSpacing:".05em",marginBottom:14}}>Финансы</div>
+          {[
+            {l:"Всего заказов",v:f(totRev),c:"var(--t0)"},
+            {l:"Оплачено",     v:f(totRev-totDebt),c:"var(--teal)"},
+            {l:"Долг",         v:f(totDebt),c:totDebt>0?"var(--amber)":"var(--teal)"},
+            {l:"Ср. заказ",    v:f(c.avg),c:"var(--blue)"},
+          ].map((row)=>(
+            <div key={row.l} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid var(--b0)"}}>
+              <span style={{fontSize:12,color:"var(--t2)"}}>{row.l}</span>
+              <span style={{fontSize:13,fontWeight:700,color:row.c,fontFamily:"var(--mono)"}}>{row.v}</span>
+            </div>
+          ))}
+        </Card>
+
+        <Card sx={{padding:18}}>
+          <div style={{fontSize:12,fontWeight:600,color:"var(--t2)",textTransform:"uppercase",letterSpacing:".05em",marginBottom:14}}>Накладные</div>
+          {ci.length===0&&<div style={{fontSize:12,color:"var(--t3)"}}>Накладных нет</div>}
+          {ci.map(inv=>{
+            const sc=IST[inv.status]||IST.unpaid;
+            return(
+              <div key={inv.id} style={{padding:"8px 0",borderBottom:"1px solid var(--b0)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div>
+                  <div style={{fontSize:11,fontFamily:"var(--mono)",color:"var(--t2)"}}>#{inv.num}</div>
+                  <div style={{fontSize:11,color:"var(--t3)"}}>{inv.date}</div>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <Chip c={sc.c} sm>{sc.label}</Chip>
+                  <div style={{fontSize:11,fontWeight:600,color:"var(--t0)",fontFamily:"var(--mono)",marginTop:2}}>{fn(invTotal(inv))} ₸</div>
+                </div>
+              </div>
+            );
+          })}
+        </Card>
+      </div>
+    </div>
+
+    {actModal&&(
+      <Modal title="Добавить активность" onClose={()=>setActModal(null)}>
+        <FG>
+          <FL label="Тип активности">
+            <select value={actForm.type} onChange={e=>setActForm(p=>({...p,type:e.target.value}))}>
+              {Object.entries(ACT_TYPES).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+            </select>
+          </FL>
+          <FL label="Дата"><input value={actForm.date||now()} onChange={e=>setActForm(p=>({...p,date:e.target.value}))}/></FL>
+          <FL label="Описание" full>
+            <textarea value={actForm.text} onChange={e=>setActForm(p=>({...p,text:e.target.value}))}
+              rows={3} style={{resize:"vertical"}} placeholder="Что произошло?"/>
+          </FL>
+        </FG>
+        <SaveRow onClose={()=>setActModal(null)} onSave={saveActivity} label="Добавить"/>
+      </Modal>
+    )}
+
+    {modal&&(
+      <Modal title="Редактировать клиента" onClose={()=>setModal(null)}>
+        <FG>
+          <FL label="Название" full><input value={form.name||""} onChange={e=>F({name:e.target.value})}/></FL>
+          <FL label="Контакт"><input value={form.contact||""} onChange={e=>F({contact:e.target.value})}/></FL>
+          <FL label="Телефон"><input value={form.phone||""} onChange={e=>F({phone:e.target.value})}/></FL>
+          <FL label="Адрес" full><input value={form.addr||""} onChange={e=>F({addr:e.target.value})}/></FL>
+          <FL label="Сегмент">
+            <select value={form.seg||""} onChange={e=>F({seg:e.target.value})}>
+              {["Премиум","Средний","Эконом","Магазин","Парикмахерская","Оптовик"].map(s=><option key={s}>{s}</option>)}
+            </select>
+          </FL>
+          <FL label="Статус">
+            <select value={form.st||"potential"} onChange={e=>F({st:e.target.value})}>
+              {Object.entries(CST).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+            </select>
+          </FL>
+          <FL label="Условия оплаты">
+            <select value={form.pay||""} onChange={e=>F({pay:e.target.value})}>
+              {["","Предоплата","Отсрочка 7 дн","Отсрочка 14 дн","Отсрочка 30 дн"].map(s=><option key={s}>{s}</option>)}
+            </select>
+          </FL>
+          <FL label="Источник"><input value={form.source||""} onChange={e=>F({source:e.target.value})}/></FL>
+          <FL label="БИН/ИИН"><input value={form.bin||""} onChange={e=>F({bin:e.target.value})}/></FL>
+          <FL label="Ср. заказ (₸)"><input type="number" value={form.avg||""} onChange={e=>F({avg:e.target.value})}/></FL>
+          <FL label="Примечание" full><input value={form.note||""} onChange={e=>F({note:e.target.value})}/></FL>
+        </FG>
+        <SaveRow onClose={()=>setModal(null)} onSave={save}/>
+      </Modal>
+    )}
+  </div>
+);
+```
+
+}
+
+return(
+<div>
+<PageHead title=“Клиенты” sub={`${clients.length} контактов · ${clients.filter(c=>c.st==="active").length} активных`}
+right={<Btn icon=“plus” onClick={()=>{setForm({st:“potential”,seg:“Средний”,activities:[]});setModal(“add”);}}>Добавить клиента</Btn>}/>
+
+```
+  <div className="au1" style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+    <div style={{position:"relative",flex:"0 0 200px"}}>
+      <SVG n="search" s={14} c="var(--t3)" style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)"}}/>
+      <input value={search} onChange={e=>setSearch(e.target.value)}
+        placeholder="Поиск..." style={{paddingLeft:32,fontSize:12}}/>
+    </div>
+    {[["all","Все",clients.length],...Object.entries(CST).map(([k,v])=>[k,v.label,clients.filter(c=>c.st===k).length])]
+      .filter(([,,n])=>n>0).map(([k,l,n])=>(
+      <button key={k} onClick={()=>setFilter(k)} style={{padding:"6px 12px",borderRadius:6,fontSize:11,fontWeight:600,
+        border:`1px solid ${filter===k?"var(--blue)":"var(--b1)"}`,
+        background:filter===k?"rgba(59,126,248,.15)":"transparent",
+        color:filter===k?"var(--blue)":"var(--t2)"}}>
+        {l} <span style={{opacity:.65}}>({n})</span>
+      </button>
+    ))}
+  </div>
+
+  <div style={{display:"grid",gap:8}}>
+    {list.map(c=>{
+      const sc=CST[c.st]||CST.potential;
+      const ci=clientInvoices(c.id);
+      const totRev=ci.reduce((s,x)=>s+invTotal(x),0);
+      return(
+        <Card key={c.id} className="au" sx={{padding:0,cursor:"pointer",transition:"border-color .15s",overflow:"hidden"}}
+          onMouseEnter={e=>e.currentTarget.style.borderColor="var(--b2)"}
+          onMouseLeave={e=>e.currentTarget.style.borderColor="var(--b0)"}>
+          <div style={{padding:"14px 16px",display:"flex",gap:12,alignItems:"center",minWidth:0}}>
+            {/* Avatar */}
+            <div style={{width:38,height:38,borderRadius:10,background:`${sc.c}15`,
+              display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,
+              border:`1px solid ${sc.c}25`}}>
+              <span style={{fontSize:14,fontWeight:800,color:sc.c}}>{c.name[0]}</span>
+            </div>
+            {/* Info */}
+            <div style={{flex:1,minWidth:0,overflow:"hidden"}} onClick={()=>{setSel(c);setView("detail")}}>
+              <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:4,flexWrap:"wrap"}}>
+                <span style={{fontSize:14,fontWeight:700,color:"var(--t0)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:160}}>{c.name}</span>
+                <Chip c={sc.c} sm dot={c.st==="active"?"pulse":undefined}>{sc.label}</Chip>
+                <Chip c="var(--t3)" sm>{c.seg}</Chip>
+              </div>
+              <div style={{display:"flex",gap:12,fontSize:11,color:"var(--t2)",flexWrap:"wrap",overflow:"hidden"}}>
+                <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:160}}>{c.contact}</span>
+                <span style={{whiteSpace:"nowrap"}}>{c.phone}</span>
+              </div>
+            </div>
+            {/* Revenue + actions */}
+            <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",flexShrink:0,gap:6}}>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:10,color:"var(--t3)"}}>Оборот</div>
+                <div style={{fontSize:14,fontWeight:700,color:"var(--t0)",fontFamily:"var(--mono)",whiteSpace:"nowrap"}}>{fn(totRev)} ₸</div>
+              </div>
+              <div className="client-card-actions" style={{display:"flex",gap:4}}>
+                <Btn v="ghost" sm icon="eye" onClick={()=>{setSel(c);setView("detail")}}></Btn>
+                <Btn v="ghost" sm icon="edit" onClick={e=>{e.stopPropagation();setForm({...c});setModal(c);}}></Btn>
+                <Btn v="danger" sm icon="trash" onClick={e=>{e.stopPropagation();del(c.id);}}></Btn>
+              </div>
+            </div>
+          </div>
+        </Card>
+      );
+    })}
+  </div>
+
+  {modal&&(
+    <Modal title={modal==="add"?"Новый клиент":"Редактировать клиента"} onClose={()=>setModal(null)} wide>
+      <FG>
+        <FL label="Название" full><input value={form.name||""} onChange={e=>F({name:e.target.value})} placeholder="Название компании"/></FL>
+        <FL label="Контакт"><input value={form.contact||""} onChange={e=>F({contact:e.target.value})}/></FL>
+        <FL label="Телефон"><input value={form.phone||""} onChange={e=>F({phone:e.target.value})}/></FL>
+        <FL label="Адрес" full><input value={form.addr||""} onChange={e=>F({addr:e.target.value})}/></FL>
+        <FL label="Сегмент">
+          <select value={form.seg||""} onChange={e=>F({seg:e.target.value})}>
+            {["Премиум","Средний","Эконом","Магазин","Парикмахерская","Оптовик"].map(s=><option key={s}>{s}</option>)}
+          </select>
+        </FL>
+        <FL label="Статус">
+          <select value={form.st||"potential"} onChange={e=>F({st:e.target.value})}>
+            {Object.entries(CST).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+          </select>
+        </FL>
+        <FL label="Условия оплаты">
+          <select value={form.pay||""} onChange={e=>F({pay:e.target.value})}>
+            {["","Предоплата","Отсрочка 7 дн","Отсрочка 14 дн","Отсрочка 30 дн"].map(s=><option key={s}>{s}</option>)}
+          </select>
+        </FL>
+        <FL label="Источник лида">
+          <select value={form.source||""} onChange={e=>F({source:e.target.value})}>
+            {["","Холодный звонок","Холодный визит","Рекомендация","Выставка","Instagram","Другое"].map(s=><option key={s}>{s}</option>)}
+          </select>
+        </FL>
+        <FL label="БИН/ИИН"><input value={form.bin||""} onChange={e=>F({bin:e.target.value})}/></FL>
+        <FL label="Ср. заказ (₸)"><input type="number" value={form.avg||""} onChange={e=>F({avg:e.target.value})}/></FL>
+        <FL label="Примечание" full><textarea value={form.note||""} onChange={e=>F({note:e.target.value})} rows={2} style={{resize:"none"}}/></FL>
+      </FG>
+      <SaveRow onClose={()=>setModal(null)} onSave={save}/>
+    </Modal>
+  )}
+</div>
+```
+
+);
+}
+
+/* ─────────────────────────────────────────────────────────────────
+PRODUCTS / STOCK
+───────────────────────────────────────────────────────────────── */
+function Products({products,setProducts}){
+const [modal,setModal]=useState(null);
+const [form,setForm]=useState({});
+const F=v=>setForm(p=>({…p,…v}));
+
+const save=()=>{
+const n={…form,bp:+form.bp||0,sp:+form.sp||0,open:+form.open||0,inc:+form.inc||0,exp:+form.exp||0,min:+form.min||0};
+if(modal===“add”)setProducts(p=>[…p,{…n,id:uid()}]);
+else setProducts(p=>p.map(x=>x.id===modal.id?{…n,id:x.id}:x));
+setModal(null);
+};
+
+const alerts=products.filter(p=>(p.open+p.inc-p.exp)<=p.min).length;
+const totalVal=products.reduce((s,p)=>s+(p.open+p.inc-p.exp)*p.sp,0);
+
+return(
+<div>
+<PageHead title=“Склад” sub={`Стоимость остатков: ${f(totalVal)}`}
+right={<>
+{alerts>0&&<Chip c="var(--red)"><SVG n="alert" s={11}/>  {alerts} позиций заканчивается</Chip>}
+<Btn icon=“plus” onClick={()=>{setForm({unit:“шт”,min:10,open:0,inc:0,exp:0});setModal(“add”);}}>Добавить товар</Btn>
+</>}/>
+
+```
+  <div style={{display:"grid",gap:8}}>
+    {products.map((p,i)=>{
+      const rem=p.open+p.inc-p.exp,isLow=rem<=p.min;
+      const margin=p.sp>0?Math.round((p.sp-p.bp)/p.sp*100):0;
+      const pct=Math.min(100,Math.round(rem/(p.min*4)*100));
+      return(
+        <Card key={p.id} className="au" sx={{padding:18,borderColor:isLow?"rgba(232,85,85,.3)":"var(--b0)"}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:12,alignItems:"center"}}>
+            <div>
+              <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:8,flexWrap:"wrap"}}>
+                <span style={{fontSize:14,fontWeight:700,color:isLow?"var(--red)":"var(--t0)"}}>{p.name}</span>
+                {isLow&&<Chip c="var(--red)" sm>Заказать</Chip>}
+                <Chip c="var(--blue)" sm>+{margin}%</Chip>
+              </div>
+              <div style={{display:"flex",gap:20,fontSize:11,color:"var(--t2)",marginBottom:10,flexWrap:"wrap"}}>
+                <span>Закупка: <b style={{color:"var(--t1)",fontFamily:"var(--mono)"}}>{fn(p.bp)} ₸</b></span>
+                <span>Продажа: <b style={{color:"var(--t1)",fontFamily:"var(--mono)"}}>{fn(p.sp)} ₸</b></span>
+                <span style={{color:"var(--teal)"}}>+{p.inc} приход</span>
+                <span style={{color:"var(--red)"}}>-{p.exp} расход</span>
+                <span>Мин.: <b style={{color:isLow?"var(--red)":"var(--t1)"}}>{p.min}</b></span>
+              </div>
+              <Bar pct={pct} c={isLow?"var(--red)":pct<50?"var(--amber)":"var(--teal)"}/>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:28,fontWeight:800,color:isLow?"var(--red)":"var(--teal)",
+                letterSpacing:"-.04em",lineHeight:1,fontFamily:"var(--mono)"}}>{rem}</div>
+              <div style={{fontSize:10,color:"var(--t3)",marginBottom:10}}>{p.unit}</div>
+              <div style={{display:"flex",gap:6,justifyContent:"flex-end"}}>
+                <Btn v="ghost" sm icon="edit" onClick={()=>{setForm({...p});setModal(p)}}></Btn>
+                <Btn v="danger" sm icon="trash" onClick={()=>setProducts(pr=>pr.filter(x=>x.id!==p.id))}></Btn>
+              </div>
+            </div>
+          </div>
+        </Card>
+      );
+    })}
+  </div>
+
+  {modal&&(
+    <Modal title={modal==="add"?"Новый товар":"Редактировать товар"} onClose={()=>setModal(null)}>
+      <FG>
+        <FL label="Наименование" full><input value={form.name||""} onChange={e=>F({name:e.target.value})}/></FL>
+        <FL label="Ед. изм."><input value={form.unit||"шт"} onChange={e=>F({unit:e.target.value})}/></FL>
+        <FL label="Мин. остаток"><input type="number" value={form.min||""} onChange={e=>F({min:e.target.value})}/></FL>
+        <FL label="Цена закупки"><input type="number" value={form.bp||""} onChange={e=>F({bp:e.target.value})}/></FL>
+        <FL label="Цена продажи"><input type="number" value={form.sp||""} onChange={e=>F({sp:e.target.value})}/></FL>
+        <FL label="Остаток нач."><input type="number" value={form.open||""} onChange={e=>F({open:e.target.value})}/></FL>
+        <FL label="Приход"><input type="number" value={form.inc||""} onChange={e=>F({inc:e.target.value})}/></FL>
+        <FL label="Расход"><input type="number" value={form.exp||""} onChange={e=>F({exp:e.target.value})}/></FL>
+      </FG>
+      <SaveRow onClose={()=>setModal(null)} onSave={save}/>
+    </Modal>
+  )}
+</div>
+```
+
+);
+}
+
+/* ─────────────────────────────────────────────────────────────────
+PRINT OVERLAY
+Strategy: показываем документ в белом оверлее поверх приложения.
+При window.print() CSS @media print скрывает #app-shell и показывает #print-doc.
+Это единственный надёжный способ в sandbox-iframe Claude.ai.
+───────────────────────────────────────────────────────────────── */
+function PrintOverlay({data, onClose}){
+const {title,num,date,due,supplier,buyer,items=[],status,paidAmt,note,type} = data;
+const total = items.reduce((s,it)=>s+(+it.qty||0)*(+it.price||0),0);
+const vat   = Math.round(total*0.12);
+const debt  = type===“invoice”
+? (status===“paid”?0:status===“partial”?(total-(paidAmt||0)):total)
+: 0;
+const docLabel = type===“receipt” ? “АКТ ПРИЁМА ТОВАРОВ НА СКЛАД” : “ТОВАРНАЯ НАКЛАДНАЯ”;
+const sigs = type===“receipt”
+? [[“Поставщик (сдал)”, supplier||“ИП Елнур”],[“Кладовщик (принял)”,”________________”]]
+: [[“Отпустил (Поставщик)”,“ИП Елнур, Дистрибьютор”],[“Получил (Покупатель)”, buyer||”—”]];
+
+// Show #print-doc (hidden div) with white doc content so @media print can show it
+useEffect(()=>{
+const el = document.getElementById(“print-doc”);
+if(!el) return;
+el.style.display = “block”;
+el.style.background = “#fff”;
+el.style.padding = “24px”;
+// We can’t render React into it easily, so just show the overlay approach
+// The overlay itself IS the printable content via CSS
+return ()=>{
+if(el){ el.style.display = “none”; el.innerHTML = “”; }
+};
+},[]);
+
+const doPrint = () => window.print();
+
+const docContent = (
+<div className=“pdoc-wrap” style={{
+background:”#fff”,color:”#111”,maxWidth:720,margin:“0 auto”,
+padding:“36px 40px”,borderRadius:12,
+boxShadow:“0 4px 32px rgba(0,0,0,.12)”,
+fontFamily:”‘Plus Jakarta Sans’,Arial,sans-serif”,
+WebkitPrintColorAdjust:“exact”,printColorAdjust:“exact”
+}}>
+{/* Header */}
+<div style={{display:“flex”,justifyContent:“space-between”,alignItems:“flex-start”,
+paddingBottom:18,borderBottom:“2px solid #e8ecf4”,marginBottom:22}}>
+<div>
+<div style={{fontSize:10,fontWeight:700,color:”#9ca3af”,letterSpacing:”.08em”,
+textTransform:“uppercase”,marginBottom:5}}>{docLabel}</div>
+<div style={{fontSize:22,fontWeight:800,color:”#111”}}>{title}</div>
+</div>
+<div style={{textAlign:“right”,flexShrink:0,marginLeft:16}}>
+<div style={{fontSize:18,fontWeight:800,color:”#3b7ef8”,fontFamily:“monospace”}}>№ {num}</div>
+<div style={{fontSize:12,color:”#9ca3af”,marginTop:2}}>от {date}</div>
+{due&&<div style={{fontSize:12,color:”#9ca3af”}}>срок: {due}</div>}
+</div>
+</div>
+
+```
+  {/* Parties */}
+  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:22}}>
+    {[
+      {lbl:type==="receipt"?"Поставщик":"Поставщик / Дистрибьютор",
+       name:supplier||"ИП Елнур, г. Астана",sub:"Дистрибьютор, г. Астана"},
+      {lbl:type==="receipt"?"Получатель / Склад":"Покупатель",
+       name:buyer||"—",sub:""},
+    ].map((p,i)=>(
+      <div key={i} style={{background:"#f8faff",borderRadius:8,padding:12}}>
+        <div style={{fontSize:9,fontWeight:700,color:"#9ca3af",textTransform:"uppercase",
+          letterSpacing:".05em",marginBottom:5}}>{p.lbl}</div>
+        <div style={{fontSize:13,fontWeight:700,color:"#111"}}>{p.name}</div>
+        {p.sub&&<div style={{fontSize:11,color:"#6b7280",marginTop:2}}>{p.sub}</div>}
+      </div>
+    ))}
+  </div>
+
+  {/* Table */}
+  <table style={{width:"100%",borderCollapse:"collapse",marginBottom:18,fontSize:12}}>
+    <thead>
+      <tr>
+        {[["№","32px","left"],["Наименование товара","","left"],["Ед.","44px","center"],
+          ["Кол-во","64px","right"],["Цена ₸","100px","right"],["Сумма ₸","110px","right"]
+        ].map(([h,w,a])=>(
+          <th key={h} style={{background:"#3b7ef8",color:"#fff",padding:"8px 10px",
+            fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:".04em",
+            textAlign:a,width:w||"auto",WebkitPrintColorAdjust:"exact",printColorAdjust:"exact"}}>{h}</th>
+        ))}
+      </tr>
+    </thead>
+    <tbody>
+      {items.map((it,i)=>(
+        <tr key={i} style={{background:i%2===0?"#fff":"#f5f8ff"}}>
+          <td style={{padding:"8px 10px",color:"#9ca3af"}}>{i+1}</td>
+          <td style={{padding:"8px 10px",fontWeight:600,color:"#111"}}>{it.name||it.prod||""}</td>
+          <td style={{padding:"8px 10px",color:"#6b7280",textAlign:"center"}}>{it.unit||"шт"}</td>
+          <td style={{padding:"8px 10px",textAlign:"right",fontWeight:600}}>{+it.qty||0}</td>
+          <td style={{padding:"8px 10px",textAlign:"right",fontFamily:"monospace"}}>{fn(it.price)}</td>
+          <td style={{padding:"8px 10px",textAlign:"right",fontWeight:700,fontFamily:"monospace"}}>{fn((+it.qty||0)*(+it.price||0))}</td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+
+  {/* Totals */}
+  <div style={{display:"flex",justifyContent:"flex-end",marginBottom:18}}>
+    <div style={{minWidth:260}}>
+      {type==="invoice"&&[["Без НДС:",fn(total-vat)+" ₸"],["НДС 12%:",fn(vat)+" ₸"]].map(([l,v])=>(
+        <div key={l} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",
+          fontSize:11,color:"#6b7280",borderBottom:"1px solid #eee"}}>
+          <span>{l}</span><span style={{fontFamily:"monospace"}}>{v}</span>
+        </div>
+      ))}
+      <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",
+        fontSize:14,fontWeight:800,color:"#111",borderTop:"2px solid #3b7ef8",marginTop:3}}>
+        <span>ИТОГО:</span>
+        <span style={{color:"#3b7ef8",fontFamily:"monospace"}}>{fn(total)} ₸</span>
+      </div>
+      {debt>0&&(
+        <div style={{display:"flex",justifyContent:"space-between",padding:"6px 10px",
+          background:"#fff5f5",borderRadius:6,fontSize:11,fontWeight:700,color:"#dc2626",marginTop:5}}>
+          <span>Остаток долга:</span><span style={{fontFamily:"monospace"}}>{fn(debt)} ₸</span>
+        </div>
+      )}
+    </div>
+  </div>
+
+  {note&&<div style={{padding:"10px 14px",background:"#fffbeb",borderRadius:8,
+    fontSize:11,color:"#92400e",marginBottom:18}}>Примечание: {note}</div>}
+
+  {/* Signatures */}
+  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24,
+    borderTop:"1px solid #e5e7eb",paddingTop:18}}>
+    {sigs.map(([role,name])=>(
+      <div key={role}>
+        <div style={{fontSize:9,color:"#9ca3af",fontWeight:700,textTransform:"uppercase",
+          letterSpacing:".05em",marginBottom:12}}>{role}</div>
+        <div style={{borderBottom:"1px solid #d1d5db",marginBottom:5,height:28}}/>
+        <div style={{fontSize:11,color:"#555"}}>{name}</div>
+        <div style={{fontSize:10,color:"#d1d5db",marginTop:2}}>МП · Подпись · Дата</div>
+      </div>
+    ))}
+  </div>
+</div>
+```
+
+);
+
+return (
+// Screen overlay (dark) — contains toolbar + white doc preview
+<div className=“print-overlay” style={{position:“fixed”,inset:0,zIndex:2000,background:“rgba(7,9,15,.94)”,
+backdropFilter:“blur(12px)”,display:“flex”,flexDirection:“column”,
+alignItems:“center”,padding:“18px 14px 24px”,overflowY:“auto”}}>
+
+```
+  {/* Toolbar — hidden during print via .pbar class */}
+  <div className="pbar" style={{width:"100%",maxWidth:720,display:"flex",gap:10,
+    justifyContent:"space-between",alignItems:"center",marginBottom:14,flexShrink:0}}>
+    <div style={{fontSize:13,fontWeight:600,color:"var(--t1)"}}>
+      {docLabel} · № {num}
+    </div>
+    <div style={{display:"flex",gap:8}}>
+      <button onClick={onClose} style={{padding:"8px 16px",borderRadius:8,
+        border:"1px solid rgba(255,255,255,.15)",background:"transparent",
+        color:"#b8c4e8",cursor:"pointer",fontSize:13,fontWeight:600,fontFamily:"var(--font)"}}>
+        Закрыть
+      </button>
+      <button onClick={doPrint} style={{padding:"8px 18px",borderRadius:8,border:"none",
+        background:"var(--blue)",color:"#fff",cursor:"pointer",fontSize:13,
+        fontWeight:700,fontFamily:"var(--font)",display:"flex",alignItems:"center",gap:6}}>
+        <SVG n="print" s={14} c="#fff"/>
+        Сохранить PDF
+      </button>
+    </div>
+  </div>
+
+  {/* White doc preview */}
+  {docContent}
+</div>
+```
+
+);
+}
+
+/* ─────────────────────────────────────────────────────────────────
+INVOICES
+───────────────────────────────────────────────────────────────── */
+function Invoices({invoices,setInvoices,clients,products}){
+const [modal,setModal]=useState(null);
+const [printData,setPrintData]=useState(null);
+const [filter,setFilter]=useState(“all”);
+const [form,setForm]=useState({items:[{pid:””,name:””,qty:1,price:0}]});
+const F=v=>setForm(p=>({…p,…v}));
+
+const addItem=()=>F({items:[…form.items,{pid:””,name:””,qty:1,price:0}]});
+const removeItem=i=>F({items:form.items.filter((_,j)=>j!==i)});
+const setItem=(i,k,v)=>F({items:form.items.map((it,j)=>{
+if(j!==i)return it;
+if(k===“pid”){const p=products.find(x=>x.id===v);return{…it,pid:v,name:p?.name||””,price:p?.sp||0};}
+return{…it,[k]:k===“qty”||k===“price”?+v||0:v};
+})});
+
+const nextNum=()=>pad(Math.max(0,…invoices.map(x=>parseInt(x.num)||0))+1);
+
+const save=()=>{
+const item={…form,num:modal===“add”?nextNum():form.num,
+items:form.items.filter(it=>it.name),
+id:modal===“add”?uid():form.id,
+created:modal===“add”?now():form.created};
+if(modal===“add”)setInvoices(p=>[…p,item]);
+else setInvoices(p=>p.map(x=>x.id===form.id?item:x));
+setModal(null);
+};
+
+const openEdit=inv=>{setForm({…inv,items:[…inv.items.map(x=>({…x}))]});setModal(inv)};
+
+const list=invoices.filter(x=>filter===“all”||x.status===filter);
+const totRev=invoices.reduce((s,x)=>s+invTotal(x),0);
+const totDebt=invoices.reduce((s,x)=>s+invDebt(x),0);
+const formTotal=(form.items||[]).reduce((s,it)=>s+(it.qty||0)*(it.price||0),0);
+
+const printInvoice=inv=>{
+const cl=clients.find(c=>c.id===inv.client);
+setPrintData({
+title:“Товарная накладная”,num:inv.num,date:inv.date,due:inv.due,
+supplier:“ИП Елнур, Дистрибьютор, г. Астана”,
+buyer:cl?`${cl.name}${cl.addr?", "+cl.addr:""}${cl.bin?", БИН: "+cl.bin:""}`:”—”,
+items:inv.items,status:inv.status,paidAmt:inv.paid,note:inv.note,type:“invoice”
+});
+};
+
+return(
+<div>
+<PageHead title=“Накладные” sub={`${invoices.length} документов`}
+right={<Btn icon=“plus” onClick={()=>{setForm({date:now(),due:””,status:“unpaid”,note:””,items:[{pid:””,name:””,qty:1,price:0}]});setModal(“add”);}}>Новая накладная</Btn>}/>
+
+```
+  <div className="au1" style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:12,marginBottom:18}}>
+    {[{l:"Выставлено",v:f(totRev),c:"var(--blue)"},{l:"Оплачено",v:f(totRev-totDebt),c:"var(--teal)"},{l:"Дебиторка",v:f(totDebt),c:"var(--amber)"}]
+      .map((k,i)=>(
+      <Card key={i} sx={{padding:16}}>
+        <div style={{fontSize:10,fontWeight:600,color:"var(--t2)",textTransform:"uppercase",letterSpacing:".05em",marginBottom:5}}>{k.l}</div>
+        <div style={{fontSize:18,fontWeight:700,color:k.c,fontFamily:"var(--mono)"}}>{k.v}</div>
+      </Card>
+    ))}
+  </div>
+
+  <div className="au2" style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+    {[["all","Все",invoices.length],...Object.entries(IST).map(([k,v])=>[k,v.label,invoices.filter(x=>x.status===k).length])]
+      .filter(([,,n])=>n>0).map(([k,l,n])=>(
+      <button key={k} onClick={()=>setFilter(k)} style={{padding:"5px 11px",borderRadius:6,fontSize:11,fontWeight:600,
+        border:`1px solid ${filter===k?"var(--blue)":"var(--b1)"}`,
+        background:filter===k?"rgba(59,126,248,.15)":"transparent",
+        color:filter===k?"var(--blue)":"var(--t2)"}}>
+        {l} ({n})
+      </button>
+    ))}
+  </div>
+
+  <div style={{display:"grid",gap:8}}>
+    {list.map((inv,i)=>{
+      const cl=clients.find(c=>c.id===inv.client);
+      const tot=invTotal(inv),sc=IST[inv.status]||IST.unpaid,d=invDebt(inv);
+      return(
+        <Card key={inv.id} className="au" sx={{padding:14,overflow:"hidden"}}>
+          <div style={{display:"flex",gap:10,alignItems:"flex-start",minWidth:0}}>
+            <div style={{flex:1,minWidth:0,overflow:"hidden"}}>
+              <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:5,flexWrap:"wrap"}}>
+                <span style={{fontSize:12,fontWeight:700,color:"var(--blue)",fontFamily:"var(--mono)",whiteSpace:"nowrap"}}>#{inv.num}</span>
+                <span style={{fontSize:13,fontWeight:700,color:"var(--t0)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:180}}>{cl?.name||inv.client}</span>
+                <Chip c={sc.c} sm>{sc.label}</Chip>
+              </div>
+              <div style={{fontSize:11,color:"var(--t2)",display:"flex",gap:10,flexWrap:"wrap"}}>
+                <span>{inv.date}</span>
+                {inv.due&&<span>до {inv.due}</span>}
+                <span>{inv.items?.length||0} поз.</span>
+              </div>
+              {/* Mobile amounts */}
+              <div style={{display:"flex",gap:14,marginTop:8}}>
+                <div>
+                  <div style={{fontSize:10,color:"var(--t3)"}}>Сумма</div>
+                  <div style={{fontSize:14,fontWeight:700,color:"var(--t0)",fontFamily:"var(--mono)",whiteSpace:"nowrap"}}>{fn(tot)} ₸</div>
+                </div>
+                {d>0&&<div>
+                  <div style={{fontSize:10,color:"var(--t3)"}}>Долг</div>
+                  <div style={{fontSize:14,fontWeight:700,color:"var(--amber)",fontFamily:"var(--mono)",whiteSpace:"nowrap"}}>{fn(d)} ₸</div>
+                </div>}
+              </div>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:6,flexShrink:0}}>
+              <Btn v="teal" sm icon="print" onClick={()=>printInvoice(inv)}>PDF</Btn>
+              <div style={{display:"flex",gap:4}}>
+                <Btn v="ghost" sm icon="edit" onClick={()=>openEdit(inv)}></Btn>
+                <Btn v="danger" sm icon="trash" onClick={()=>{if(confirm("Удалить?"))setInvoices(p=>p.filter(x=>x.id!==inv.id))}}></Btn>
+              </div>
+            </div>
+          </div>
+        </Card>
+      );
+    })}
+  </div>
+
+  {modal&&(
+    <Modal title={modal==="add"?`Накладная #${nextNum()}`:"Редактировать накладную"} onClose={()=>setModal(null)} wide>
+      <FG>
+        <FL label="Клиент" full>
+          <select value={form.client||""} onChange={e=>F({client:e.target.value})}>
+            <option value="">— выбрать клиента —</option>
+            {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </FL>
+        <FL label="Дата"><input value={form.date||""} onChange={e=>F({date:e.target.value})}/></FL>
+        <FL label="Срок оплаты"><input value={form.due||""} onChange={e=>F({due:e.target.value})}/></FL>
+        <FL label="Статус">
+          <select value={form.status||"unpaid"} onChange={e=>F({status:e.target.value})}>
+            {Object.entries(IST).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+          </select>
+        </FL>
+        {form.status==="partial"&&(
+          <FL label="Оплачено (₸)"><input type="number" value={form.paid||""} onChange={e=>F({paid:+e.target.value||0})}/></FL>
+        )}
+      </FG>
+
+      <div style={{marginBottom:14}}>
+        <div style={{fontSize:11,fontWeight:600,color:"var(--t2)",textTransform:"uppercase",letterSpacing:".05em",marginBottom:10}}>Позиции</div>
+        {(form.items||[]).map((it,i)=>(
+          <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 64px 96px 24px",gap:6,marginBottom:8,alignItems:"end"}}>
+            <div>
+              {i===0&&<label style={{display:"block",fontSize:10,fontWeight:600,color:"var(--t3)",letterSpacing:".05em",textTransform:"uppercase",marginBottom:5}}>Товар</label>}
+              <select value={it.pid||""} onChange={e=>setItem(i,"pid",e.target.value)}>
+                <option value="">— выбрать —</option>
+                {products.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div>
+              {i===0&&<label style={{display:"block",fontSize:10,fontWeight:600,color:"var(--t3)",letterSpacing:".05em",textTransform:"uppercase",marginBottom:5}}>Кол-во</label>}
+              <input type="number" min={1} value={it.qty} onChange={e=>setItem(i,"qty",e.target.value)}/>
+            </div>
+            <div>
+              {i===0&&<label style={{display:"block",fontSize:10,fontWeight:600,color:"var(--t3)",letterSpacing:".05em",textTransform:"uppercase",marginBottom:5}}>Цена ₸</label>}
+              <input type="number" value={it.price} onChange={e=>setItem(i,"price",e.target.value)}/>
+            </div>
+            <button onClick={()=>removeItem(i)} style={{background:"none",border:"none",color:"var(--red)",cursor:"pointer",fontSize:18,paddingBottom:i===0?4:0}}>×</button>
+          </div>
+        ))}
+        <Btn v="subtle" sm icon="plus" onClick={addItem}>Добавить позицию</Btn>
+      </div>
+
+      <div style={{background:"var(--s0)",borderRadius:8,padding:"10px 14px",marginBottom:14,
+        display:"flex",justifyContent:"space-between",alignItems:"center",border:"1px solid var(--b1)"}}>
+        <span style={{fontSize:12,color:"var(--t2)",fontWeight:600}}>Итого</span>
+        <span style={{fontSize:18,fontWeight:700,color:"var(--blue)",fontFamily:"var(--mono)"}}>{fn(formTotal)} ₸</span>
+      </div>
+
+      <FL label="Примечание"><input value={form.note||""} onChange={e=>F({note:e.target.value})}/></FL>
+      <div style={{marginTop:14}}><SaveRow onClose={()=>setModal(null)} onSave={save} label="Создать накладную"/></div>
+    </Modal>
+  )}
+  {printData&&<PrintOverlay data={printData} onClose={()=>setPrintData(null)}/>}
+</div>
+```
+
+);
+}
+
+/* ─────────────────────────────────────────────────────────────────
+RECEIPTS — АКТ ПРИЁМА ТОВАРОВ
+───────────────────────────────────────────────────────────────── */
+function Receipts({receipts,setReceipts,products,setProducts}){
+const [modal,setModal]=useState(null);
+const [printData,setPrintData]=useState(null);
+const [form,setForm]=useState({items:[{pid:””,name:””,qty:1,price:0}]});
+const F=v=>setForm(p=>({…p,…v}));
+
+const printReceipt=rc=>{
+setPrintData({
+title:“Акт приёма товаров на склад”,
+num:rc.num, date:rc.date,
+supplier:rc.supplier,
+buyer:“Склад дистрибьютора ИП Елнур, г. Астана”,
+items:rc.items, note:rc.note, type:“receipt”
+});
+};
+
+const addItem=()=>F({items:[…form.items,{pid:””,name:””,qty:1,price:0}]});
+const removeItem=i=>F({items:form.items.filter((_,j)=>j!==i)});
+const setItem=(i,k,v)=>F({items:form.items.map((it,j)=>{
+if(j!==i)return it;
+if(k===“pid”){const p=products.find(x=>x.id===v);return{…it,pid:v,name:p?.name||””,price:p?.bp||0};}
+return{…it,[k]:k===“qty”||k===“price”?+v||0:v};
+})});
+
+const nextNum=()=>`АПТ-${pad(Math.max(0,...receipts.map(x=>parseInt(x.num?.split("-")[1])||0))+1)}`;
+
+const save=()=>{
+const item={…form,num:modal===“add”?nextNum():form.num,
+items:form.items.filter(it=>it.name),
+id:modal===“add”?uid():form.id,
+created:modal===“add”?now():form.created};
+// If posting: update product incomes
+if(modal===“add”&&item.status===“posted”){
+setProducts(prev=>prev.map(p=>{
+const line=item.items.find(it=>it.pid===p.id);
+return line?{…p,inc:p.inc+(line.qty||0)}:p;
+}));
+}
+if(modal===“add”)setReceipts(p=>[…p,item]);
+else setReceipts(p=>p.map(x=>x.id===form.id?item:x));
+setModal(null);
+};
+
+const postReceipt=rec=>{
+if(rec.status===“posted”){alert(“Акт уже проведён”);return;}
+setProducts(prev=>prev.map(p=>{
+const line=rec.items.find(it=>it.pid===p.id);
+return line?{…p,inc:p.inc+(line.qty||0)}:p;
+}));
+setReceipts(p=>p.map(x=>x.id===rec.id?{…x,status:“posted”}:x));
+};
+
+const formTotal=(form.items||[]).reduce((s,it)=>s+(it.qty||0)*(it.price||0),0);
+const totAll=receipts.reduce((s,x)=>s+rcpTotal(x),0);
+
+return(
+<div>
+<PageHead title=“Акты приёма товаров”
+sub={`${receipts.length} актов · Итого закуплено: ${f(totAll)}`}
+right={<Btn icon=“plus” onClick={()=>{setForm({date:now(),supplier:“ТОО Balyq Beauty Almaty”,status:“draft”,note:””,items:[{pid:””,name:””,qty:1,price:0}]});setModal(“add”);}}>Новый акт</Btn>}/>
+
+```
+  <div style={{display:"grid",gap:10}}>
+    {receipts.map((rc,i)=>{
+      const tot=rcpTotal(rc);
+      const isDraft=rc.status==="draft";
+      return(
+        <Card key={rc.id} className="au" sx={{padding:14,borderColor:isDraft?"rgba(59,126,248,.25)":"var(--b0)",overflow:"hidden"}}>
+          <div style={{display:"flex",gap:10,alignItems:"flex-start",minWidth:0}}>
+            <div style={{flex:1,minWidth:0,overflow:"hidden"}}>
+              <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:5,flexWrap:"wrap"}}>
+                <span style={{fontSize:12,fontWeight:700,color:"var(--blue)",fontFamily:"var(--mono)",whiteSpace:"nowrap"}}>{rc.num}</span>
+                <Chip c={isDraft?"var(--amber)":"var(--teal)"} sm>{isDraft?"Черновик":"Проведён"}</Chip>
+              </div>
+              <div style={{fontSize:13,fontWeight:700,color:"var(--t0)",marginBottom:4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{rc.supplier}</div>
+              <div style={{fontSize:11,color:"var(--t2)",display:"flex",gap:10,flexWrap:"wrap",marginBottom:8}}>
+                <span>{rc.date}</span>
+                <span>{rc.items?.length||0} позиций</span>
+              </div>
+              <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                {(rc.items||[]).slice(0,3).map((it,j)=>(
+                  <Chip key={j} c="var(--t3)" sm>{it.name?.split(" ").slice(0,2).join(" ")} × {it.qty}</Chip>
+                ))}
+                {rc.items?.length>3&&<Chip c="var(--t3)" sm>+{rc.items.length-3}</Chip>}
+              </div>
+              <div style={{marginTop:8,fontSize:14,fontWeight:700,color:"var(--t0)",fontFamily:"var(--mono)",whiteSpace:"nowrap"}}>{fn(tot)} ₸</div>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:5,flexShrink:0}}>
+              {isDraft&&<Btn v="teal" sm icon="check" onClick={()=>postReceipt(rc)}>Провести</Btn>}
+              <Btn v="ghost" sm icon="print" onClick={()=>printReceipt(rc)}>Акт PDF</Btn>
+              <div style={{display:"flex",gap:4}}>
+                <Btn v="ghost" sm icon="edit" onClick={()=>{setForm({...rc,items:[...rc.items.map(x=>({...x}))]});setModal(rc)}}></Btn>
+                <Btn v="danger" sm icon="trash" onClick={()=>{if(confirm("Удалить?"))setReceipts(p=>p.filter(x=>x.id!==rc.id))}}></Btn>
+              </div>
+            </div>
+          </div>
+        </Card>
+      );
+    })}
+  </div>
+
+  {modal&&(
+    <Modal title={modal==="add"?`Акт ${nextNum()}`:"Редактировать акт"} onClose={()=>setModal(null)} wide>
+      <FG>
+        <FL label="Поставщик" full><input value={form.supplier||""} onChange={e=>F({supplier:e.target.value})}/></FL>
+        <FL label="Дата поступления"><input value={form.date||""} onChange={e=>F({date:e.target.value})}/></FL>
+        <FL label="Статус">
+          <select value={form.status||"draft"} onChange={e=>F({status:e.target.value})}>
+            <option value="draft">Черновик</option>
+            <option value="posted">Провести сразу</option>
+          </select>
+        </FL>
+      </FG>
+
+      <div style={{marginBottom:14}}>
+        <div style={{fontSize:11,fontWeight:600,color:"var(--t2)",textTransform:"uppercase",letterSpacing:".05em",marginBottom:10}}>Товарные позиции</div>
+        {(form.items||[]).map((it,i)=>(
+          <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 64px 96px 24px",gap:6,marginBottom:8,alignItems:"end"}}>
+            <div>
+              {i===0&&<label style={{display:"block",fontSize:10,fontWeight:600,color:"var(--t3)",letterSpacing:".05em",textTransform:"uppercase",marginBottom:5}}>Товар</label>}
+              <select value={it.pid||""} onChange={e=>setItem(i,"pid",e.target.value)}>
+                <option value="">— выбрать —</option>
+                {products.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div>
+              {i===0&&<label style={{display:"block",fontSize:10,fontWeight:600,color:"var(--t3)",letterSpacing:".05em",textTransform:"uppercase",marginBottom:5}}>Кол-во</label>}
+              <input type="number" min={1} value={it.qty} onChange={e=>setItem(i,"qty",e.target.value)}/>
+            </div>
+            <div>
+              {i===0&&<label style={{display:"block",fontSize:10,fontWeight:600,color:"var(--t3)",letterSpacing:".05em",textTransform:"uppercase",marginBottom:5}}>Цена ₸</label>}
+              <input type="number" value={it.price} onChange={e=>setItem(i,"price",e.target.value)}/>
+            </div>
+            <button onClick={()=>removeItem(i)} style={{background:"none",border:"none",color:"var(--red)",cursor:"pointer",fontSize:18,paddingBottom:i===0?4:0}}>×</button>
+          </div>
+        ))}
+        <Btn v="subtle" sm icon="plus" onClick={addItem}>Добавить позицию</Btn>
+      </div>
+
+      <div style={{background:"var(--s0)",borderRadius:8,padding:"10px 14px",marginBottom:14,
+        display:"flex",justifyContent:"space-between",alignItems:"center",border:"1px solid var(--b1)"}}>
+        <span style={{fontSize:12,color:"var(--t2)",fontWeight:600}}>Итого к оприходованию</span>
+        <span style={{fontSize:18,fontWeight:700,color:"var(--teal)",fontFamily:"var(--mono)"}}>{fn(formTotal)} ₸</span>
+      </div>
+
+      <FL label="Примечание"><input value={form.note||""} onChange={e=>F({note:e.target.value})}/></FL>
+      <div style={{background:"var(--s2)",borderRadius:8,padding:12,marginTop:12,fontSize:11,color:"var(--t2)"}}>
+        При статусе «Провести сразу» количества автоматически добавятся в остатки на складе.
+      </div>
+      <div style={{marginTop:14}}><SaveRow onClose={()=>setModal(null)} onSave={save} label="Сохранить акт"/></div>
+    </Modal>
+  )}
+  {printData&&<PrintOverlay data={printData} onClose={()=>setPrintData(null)}/>}
+</div>
+```
+
+);
+}
+
+/* ─────────────────────────────────────────────────────────────────
+ROUTES
+───────────────────────────────────────────────────────────────── */
+function Routes({routes,setRoutes,clients}){
+const [modal,setModal]=useState(null);
+const [form,setForm]=useState({});
+const F=v=>setForm(p=>({…p,…v}));
+const DAYS=[“Пн”,“Вт”,“Ср”,“Чт”,“Пт”];
+const clName=id=>clients.find(c=>c.id===id)?.name||id;
+
+const save=()=>{
+const n={…form,ord:+form.ord||0};
+if(modal===“add”)setRoutes(p=>[…p,{…n,id:uid()}]);
+else setRoutes(p=>p.map(r=>r.id===modal.id?{…n,id:r.id}:r));
+setModal(null);
+};
+
+const wkOrd=routes.reduce((s,r)=>s+r.ord,0);
+const done=routes.filter(r=>r.res===“done”).length;
+
+return(
+<div>
+<PageHead title=“Маршруты недели” sub={`${routes.length} визитов · ${done} выполнено · ${f(wkOrd)}`}
+right={<Btn icon=“plus” onClick={()=>{setForm({day:“Пн”,res:“none”,ord:0});setModal(“add”);}}>Добавить визит</Btn>}/>
+
+```
+  <div style={{overflowX:"auto",marginLeft:-12,marginRight:-12,paddingLeft:12,paddingRight:12,paddingBottom:4}}>
+  <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(160px,1fr))",gap:10,minWidth:840}}>
+    {DAYS.map(day=>{
+      const dr=routes.filter(r=>r.day===day);
+      const dt=dr.reduce((s,r)=>s+r.ord,0);
+      return(
+        <div key={day}>
+          <div style={{background:"var(--s2)",border:"1px solid var(--b0)",borderRadius:8,
+            padding:"8px 12px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span style={{fontSize:13,fontWeight:700,color:"var(--t0)"}}>{day}</span>
+            {dt>0&&<span style={{fontSize:11,color:"var(--teal)",fontWeight:700,fontFamily:"var(--mono)"}}>{fk(dt)}</span>}
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {dr.map(r=>{
+              const rc=RST[r.res]||RST.none;
+              return(
+                <Card key={r.id} sx={{padding:12}}>
+                  <div style={{fontWeight:700,color:"var(--t0)",marginBottom:3,fontSize:12,lineHeight:1.3}}>{clName(r.client)}</div>
+                  <div style={{color:"var(--t2)",marginBottom:6,fontSize:10}}>{r.time} · {r.goal}</div>
+                  <Chip c={rc.c} sm>{rc.label}</Chip>
+                  {r.ord>0&&<div style={{marginTop:6,fontSize:13,fontWeight:700,color:"var(--teal)",fontFamily:"var(--mono)"}}>{fk(r.ord)}</div>}
+                  {r.note&&<div style={{marginTop:4,fontSize:10,color:"var(--amber)",fontStyle:"italic"}}>{r.note}</div>}
+                  <div style={{display:"flex",gap:4,marginTop:8}}>
+                    <Btn v="ghost" sm icon="edit" onClick={()=>{setForm({...r});setModal(r);}}></Btn>
+                    <Btn v="danger" sm icon="trash" onClick={()=>setRoutes(p=>p.filter(x=>x.id!==r.id))}></Btn>
+                  </div>
+                </Card>
+              );
+            })}
+            {!dr.length&&(
+              <div style={{padding:12,borderRadius:10,border:"1px dashed var(--b1)",
+                textAlign:"center",fontSize:11,color:"var(--t3)"}}>Нет визитов</div>
+            )}
+          </div>
+        </div>
+      );
+    })}
+  </div>
+  </div>
+
+  {modal&&(
+    <Modal title={modal==="add"?"Новый визит":"Редактировать визит"} onClose={()=>setModal(null)}>
+      <FG>
+        <FL label="День">
+          <select value={form.day||"Пн"} onChange={e=>F({day:e.target.value})}>
+            {DAYS.map(d=><option key={d}>{d}</option>)}
+          </select>
+        </FL>
+        <FL label="Время"><input value={form.time||""} onChange={e=>F({time:e.target.value})} placeholder="10:00"/></FL>
+        <FL label="Клиент" full>
+          <select value={form.client||""} onChange={e=>F({client:e.target.value})}>
+            <option value="">— выбрать —</option>
+            {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </FL>
+        <FL label="Адрес" full><input value={form.addr||""} onChange={e=>F({addr:e.target.value})}/></FL>
+        <FL label="Цель визита"><input value={form.goal||""} onChange={e=>F({goal:e.target.value})}/></FL>
+        <FL label="Результат">
+          <select value={form.res||"none"} onChange={e=>F({res:e.target.value})}>
+            {Object.entries(RST).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+          </select>
+        </FL>
+        <FL label="Сумма заказа (₸)"><input type="number" value={form.ord||""} onChange={e=>F({ord:e.target.value})}/></FL>
+        <FL label="Следующий визит"><input value={form.nxt||""} onChange={e=>F({nxt:e.target.value})}/></FL>
+        <FL label="Примечание" full><input value={form.note||""} onChange={e=>F({note:e.target.value})}/></FL>
+      </FG>
+      <SaveRow onClose={()=>setModal(null)} onSave={save}/>
+    </Modal>
+  )}
+</div>
+```
+
+);
+}
+
+/* ─────────────────────────────────────────────────────────────────
+P&L
+───────────────────────────────────────────────────────────────── */
+function PL({pl,setPl}){
+const [ed,setEd]=useState(null);
+const [val,setVal]=useState(””);
+
+const gp=pl.revenue.map((v,i)=>v-pl.cogs[i]);
+const totOpex=pl.revenue.map((_,i)=>pl.rent[i]+pl.logist[i]+pl.salrep[i]+pl.fuel[i]+pl.comm[i]+pl.other[i]);
+const ebitda=gp.map((v,i)=>v-totOpex[i]);
+const net=ebitda.map((v,i)=>v-pl.mysal[i]);
+
+const commit=()=>{
+if(!ed)return;
+setPl(p=>({…p,[ed.k]:p[ed.k].map((v,i)=>i===ed.i?+val||v:v)}));
+setEd(null);
+};
+
+const ROWS=[
+{k:“revenue”,l:“Выручка от продаж”,t:“income”},
+{k:“cogs”,   l:“Себестоимость”,     t:“expense”},
+{k:null,     l:“ВАЛОВАЯ ПРИБЫЛЬ”,   d:gp,      t:“calc”},
+{k:“rent”,   l:“Аренда склада”,     t:“expense”},
+{k:“logist”, l:“Логистика”,         t:“expense”},
+{k:“salrep”, l:“Зарплата торгпреда”,t:“expense”},
+{k:“fuel”,   l:“ГСМ / транспорт”,   t:“expense”},
+{k:“comm”,   l:“Связь”,            t:“expense”},
+{k:“other”,  l:“Прочее”,           t:“expense”},
+{k:null,     l:“ИТОГО РАСХОДОВ”,   d:totOpex,  t:“calc”},
+{k:null,     l:“EBITDA”,           d:ebitda,   t:“calc”},
+{k:“mysal”,  l:“Зарплата дистриб.”, t:“expense”},
+{k:null,     l:“ЧИСТАЯ ПРИБЫЛЬ”,   d:net,      t:“net”},
+];
+
+return(
+<div>
+<PageHead title="P&L — 6 месяцев" sub="Нажмите на ячейку для редактирования"/>
+
+```
+  <div className="au1" style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:12,marginBottom:20}}>
+    {[
+      {l:"Выручка 6 мес.",        v:f(pl.revenue.reduce((a,b)=>a+b,0)), c:"var(--blue)",   d:pl.revenue},
+      {l:"EBITDA 6 мес.",         v:f(ebitda.reduce((a,b)=>a+b,0)),    c:"var(--violet)", d:ebitda},
+      {l:"Чистая прибыль 6 мес.", v:f(net.reduce((a,b)=>a+b,0)),       c:net.reduce((a,b)=>a+b,0)>=0?"var(--teal)":"var(--red)", d:net},
+    ].map((k,i)=>(
+      <Card key={i} sx={{padding:18}}>
+        <div style={{fontSize:10,fontWeight:600,color:"var(--t2)",textTransform:"uppercase",letterSpacing:".05em",marginBottom:6}}>{k.l}</div>
+        <div style={{fontSize:20,fontWeight:800,color:k.c,letterSpacing:"-.03em",marginBottom:12,fontFamily:"var(--mono)"}}>{k.v}</div>
+        <Sparkline data={k.d.map(v=>v/1000)} c={k.c} w={150} h={34}/>
+      </Card>
+    ))}
+  </div>
+
+  <Card className="au2" sx={{overflow:"hidden"}}>
+    <div style={{overflowX:"auto"}}>
+      <table style={{minWidth:580}}>
+        <thead>
+          <tr>
+            <th style={{padding:"12px 16px",background:"var(--s2)",color:"var(--t2)",fontWeight:600,
+              fontSize:11,textTransform:"uppercase",letterSpacing:".05em",textAlign:"left",
+              borderBottom:"1px solid var(--b0)",minWidth:180}}>Статья</th>
+            {MONTHS.map(m=>(
+              <th key={m} style={{padding:"12px 13px",background:"var(--s2)",color:"var(--t2)",
+                fontWeight:600,fontSize:11,textTransform:"uppercase",letterSpacing:".05em",
+                textAlign:"right",borderBottom:"1px solid var(--b0)",minWidth:95}}>{m}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {ROWS.map((row,ri)=>{
+            const isCalc=row.t==="calc"||row.t==="net";
+            const bg=row.t==="net"?"rgba(15,184,160,.05)":isCalc?"rgba(59,126,248,.05)":ri%2===0?"var(--s0)":"var(--s1)";
+            return(
+              <tr key={ri} style={{background:bg}}>
+                <td style={{padding:"10px 16px",color:isCalc?"var(--t0)":"var(--t1)",
+                  fontWeight:isCalc?700:400,fontSize:12,borderBottom:"1px solid var(--b0)",
+                  borderLeft:`3px solid ${row.t==="net"?"var(--teal)":isCalc?"var(--blue)":"transparent"}`}}>
+                  {row.l}
+                </td>
+                {MONTHS.map((_,mi)=>{
+                  const rv=row.k?pl[row.k][mi]:row.d[mi];
+                  const isEd=ed?.k===row.k&&ed?.i===mi;
+                  const c=row.t==="net"?(rv>=0?"var(--teal)":"var(--red)"):isCalc?"var(--blue)":row.t==="income"?"var(--t0)":"var(--t2)";
+                  return(
+                    <td key={mi} style={{padding:"10px 13px",textAlign:"right",borderBottom:"1px solid var(--b0)",cursor:row.k?"pointer":"default"}}
+                      onClick={()=>row.k&&(setEd({k:row.k,i:mi}),setVal(String(rv)))}>
+                      {isEd?(
+                        <input autoFocus value={val} onChange={e=>setVal(e.target.value)}
+                          onBlur={commit} onKeyDown={e=>e.key==="Enter"&&commit()}
+                          style={{width:88,textAlign:"right",padding:"3px 7px",fontSize:12}}/>
+                      ):(
+                        <span style={{fontWeight:isCalc?700:400,color:c,fontFamily:"var(--mono)",
+                          fontSize:isCalc?13:11,fontVariantNumeric:"tabular-nums"}}>
+                          {fk(rv)}
+                        </span>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  </Card>
+</div>
+```
+
+);
+}
+
+/* ─────────────────────────────────────────────────────────────────
+REPORT
+───────────────────────────────────────────────────────────────── */
+function Report({clients,invoices,products,receipts}){
+const byCl=clients.map(c=>{
+const ci=invoices.filter(x=>x.client===c.id);
+return{…c,tot:ci.reduce((s,x)=>s+invTotal(x),0),pd:ci.reduce((s,x)=>s+invPaid(x),0),count:ci.length};
+}).filter(c=>c.tot>0);
+
+const totAmt=byCl.reduce((s,c)=>s+c.tot,0);
+const totDebt=byCl.reduce((s,c)=>s+(c.tot-c.pd),0);
+
+return(
+<div>
+<PageHead title=“Отчёт для поставщика”
+sub=“Апрель 2026 · Дистрибьютор: Елнур — Астана”
+right={<Btn v=“ghost” icon=“print” onClick={()=>window.print()}>Печать</Btn>}/>
+
+```
+  <div className="au1" style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:10,marginBottom:20}}>
+    {[{l:"Клиентов",v:clients.length,c:"var(--blue)"},{l:"Отгружено",v:f(totAmt),c:"var(--t0)"},{l:"Собрано",v:f(totAmt-totDebt),c:"var(--teal)"},{l:"Дебиторка",v:f(totDebt),c:totDebt>0?"var(--amber)":"var(--teal)"}]
+      .map((k,i)=>(
+      <Card key={i} sx={{padding:14,textAlign:"center"}}>
+        <div style={{fontSize:10,fontWeight:600,color:"var(--t2)",textTransform:"uppercase",letterSpacing:".05em",marginBottom:5}}>{k.l}</div>
+        <div style={{fontSize:17,fontWeight:700,color:k.c,fontFamily:"var(--mono)"}}>{k.v}</div>
+      </Card>
+    ))}
+  </div>
+
+  <Card className="au2" sx={{overflow:"hidden",marginBottom:12}}>
+    <div style={{padding:"12px 16px",borderBottom:"1px solid var(--b0)",fontSize:11,fontWeight:600,color:"var(--t2)",textTransform:"uppercase",letterSpacing:".05em"}}>1. Продажи по клиентам</div>
+    <div style={{overflowX:"auto"}}>
+      <table>
+        <thead><tr>{["Клиент","Сегмент","Накл.","Заказы","Оплачено","Долг"].map(h=>(
+          <th key={h} style={{padding:"9px 14px",color:"var(--t2)",fontWeight:600,fontSize:11,textTransform:"uppercase",textAlign:"left",borderBottom:"1px solid var(--b0)"}}>{h}</th>
+        ))}</tr></thead>
+        <tbody>
+          {byCl.map((c,i)=>{
+            const d=c.tot-c.pd;
+            return(
+              <tr key={i} style={{background:i%2===0?"var(--s0)":"var(--s1)"}}>
+                <td style={{padding:"10px 14px",color:"var(--t0)",fontWeight:600}}>{c.name}</td>
+                <td style={{padding:"10px 14px"}}><Chip c="var(--blue)" sm>{c.seg}</Chip></td>
+                <td style={{padding:"10px 14px",color:"var(--t2)",textAlign:"center",fontFamily:"var(--mono)"}}>{c.count}</td>
+                <td style={{padding:"10px 14px",fontWeight:600,color:"var(--t0)",fontFamily:"var(--mono)"}}>{fn(c.tot)} ₸</td>
+                <td style={{padding:"10px 14px",color:"var(--teal)",fontFamily:"var(--mono)"}}>{fn(c.pd)} ₸</td>
+                <td style={{padding:"10px 14px",color:d>0?"var(--amber)":"var(--teal)",fontWeight:d>0?700:400,fontFamily:"var(--mono)"}}>{fn(d)} ₸</td>
+              </tr>
+            );
+          })}
+          <tr style={{background:"rgba(59,126,248,.08)"}}>
+            <td colSpan={3} style={{padding:"10px 14px",color:"var(--blue)",fontWeight:700,fontSize:11,textTransform:"uppercase"}}>Итого</td>
+            <td style={{padding:"10px 14px",color:"var(--blue)",fontWeight:800,fontFamily:"var(--mono)"}}>{fn(totAmt)} ₸</td>
+            <td style={{padding:"10px 14px",color:"var(--teal)",fontWeight:800,fontFamily:"var(--mono)"}}>{fn(totAmt-totDebt)} ₸</td>
+            <td style={{padding:"10px 14px",color:totDebt>0?"var(--amber)":"var(--teal)",fontWeight:800,fontFamily:"var(--mono)"}}>{fn(totDebt)} ₸</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </Card>
+
+  <Card className="au3" sx={{overflow:"hidden",marginBottom:12}}>
+    <div style={{padding:"12px 16px",borderBottom:"1px solid var(--b0)",fontSize:11,fontWeight:600,color:"var(--t2)",textTransform:"uppercase",letterSpacing:".05em"}}>2. Остатки склада</div>
+    <div style={{overflowX:"auto"}}>
+      <table>
+        <thead><tr>{["Товар","Ед.","Нач.","Приход","Расход","Остаток","Статус"].map(h=>(
+          <th key={h} style={{padding:"9px 14px",color:"var(--t2)",fontWeight:600,fontSize:11,textTransform:"uppercase",textAlign:"left",borderBottom:"1px solid var(--b0)"}}>{h}</th>
+        ))}</tr></thead>
+        <tbody>
+          {products.map((p,i)=>{
+            const rem=p.open+p.inc-p.exp,isLow=rem<=p.min;
+            return(
+              <tr key={i} style={{background:i%2===0?"var(--s0)":"var(--s1)"}}>
+                <td style={{padding:"9px 14px",color:"var(--t0)"}}>{p.name}</td>
+                <td style={{padding:"9px 14px",color:"var(--t2)"}}>{p.unit}</td>
+                <td style={{padding:"9px 14px",color:"var(--t2)",textAlign:"center",fontFamily:"var(--mono)"}}>{p.open}</td>
+                <td style={{padding:"9px 14px",color:"var(--teal)",textAlign:"center",fontFamily:"var(--mono)"}}>+{p.inc}</td>
+                <td style={{padding:"9px 14px",color:"var(--red)",textAlign:"center",fontFamily:"var(--mono)"}}>-{p.exp}</td>
+                <td style={{padding:"9px 14px",fontWeight:700,color:isLow?"var(--red)":"var(--teal)",textAlign:"center",fontFamily:"var(--mono)"}}>{rem}</td>
+                <td style={{padding:"9px 14px"}}><Chip sm c={isLow?"var(--red)":"var(--teal)"}>{isLow?"Заказать":"OK"}</Chip></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  </Card>
+
+  <div className="au4" style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
+    <Card sx={{padding:18}}>
+      <div style={{fontSize:11,fontWeight:600,color:"var(--t2)",textTransform:"uppercase",letterSpacing:".05em",marginBottom:14}}>3. Структура клиентов</div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        {Object.entries(CST).map(([k,v])=>{
+          const cnt=clients.filter(c=>c.st===k).length;
+          if(!cnt)return null;
+          return(
+            <div key={k} style={{background:`${v.c}12`,border:`1px solid ${v.c}25`,borderRadius:10,
+              padding:"12px 16px",textAlign:"center",minWidth:80}}>
+              <div style={{fontSize:22,fontWeight:800,color:v.c,fontFamily:"var(--mono)"}}>{cnt}</div>
+              <div style={{fontSize:10,color:v.c,fontWeight:600,marginTop:2}}>{v.label}</div>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+    <Card sx={{padding:18}}>
+      <div style={{fontSize:11,fontWeight:600,color:"var(--t2)",textTransform:"uppercase",letterSpacing:".05em",marginBottom:14}}>4. Поставки (акты приёмки)</div>
+      {receipts.map((rc,i)=>(
+        <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid var(--b0)"}}>
+          <div>
+            <div style={{fontSize:11,fontWeight:600,color:"var(--t0)",fontFamily:"var(--mono)"}}>{rc.num}</div>
+            <div style={{fontSize:10,color:"var(--t3)"}}>{rc.date} · {rc.supplier}</div>
+          </div>
+          <div style={{textAlign:"right"}}>
+            <Chip c={rc.status==="posted"?"var(--teal)":"var(--amber)"} sm>{rc.status==="posted"?"Проведён":"Черновик"}</Chip>
+            <div style={{fontSize:11,fontWeight:600,color:"var(--t0)",fontFamily:"var(--mono)",marginTop:2}}>{fn(rcpTotal(rc))} ₸</div>
+          </div>
+        </div>
+      ))}
+    </Card>
+  </div>
+</div>
+```
+
+);
+}
+
+/* ─────────────────────────────────────────────────────────────────
+NAV CONFIG
+───────────────────────────────────────────────────────────────── */
+const TABS=[
+{id:“dashboard”,label:“Дашборд”,   icon:“dashboard”},
+{id:“clients”,  label:“Клиенты”,   icon:“clients”},
+{id:“products”, label:“Склад”,     icon:“stock”},
+{id:“invoices”, label:“Накладные”, icon:“invoices”},
+{id:“receipts”, label:“Приёмка”,   icon:“receipts”},
+{id:“routes”,   label:“Маршруты”,  icon:“routes”},
+{id:“pl”,       label:“P&L”,       icon:“pl”},
+{id:“report”,   label:“Отчёт”,     icon:“report”},
+];
+
+/* ─────────────────────────────────────────────────────────────────
+APP ROOT
+───────────────────────────────────────────────────────────────── */
+export default function App(){
+const [tab,setTab]           = useState(“dashboard”);
+const [clients,setClients]   = useState(CLIENTS0);
+const [products,setProducts] = useState(PRODUCTS0);
+const [invoices,setInvoices] = useState(INVOICES0);
+const [receipts,setReceipts] = useState(RECEIPTS0);
+const [routes,setRoutes]     = useState(ROUTES0);
+const [pl,setPl]             = useState(PL0);
+
+const alerts = products.filter(p=>(p.open+p.inc-p.exp)<=p.min).length;
+
+const screens={
+dashboard:<Dashboard clients={clients} products={products} invoices={invoices} routes={routes} receipts={receipts}/>,
+clients:  <Clients   clients={clients} setClients={setClients} invoices={invoices}/>,
+products: <Products  products={products} setProducts={setProducts}/>,
+invoices: <Invoices  invoices={invoices} setInvoices={setInvoices} clients={clients} products={products}/>,
+receipts: <Receipts  receipts={receipts} setReceipts={setReceipts} products={products} setProducts={setProducts}/>,
+routes:   <Routes    routes={routes} setRoutes={setRoutes} clients={clients}/>,
+pl:       <PL        pl={pl} setPl={setPl}/>,
+report:   <Report    clients={clients} invoices={invoices} products={products} receipts={receipts}/>,
+};
+
+const NavItem=({t,mobile})=>{
+const active=tab===t.id;
+const badge=(t.id===“products”||t.id===“stock”)&&alerts>0?alerts:0;
+return mobile?(
+<button onClick={()=>setTab(t.id)} style={{
+display:“flex”,flexDirection:“column”,alignItems:“center”,gap:3,padding:“7px 2px”,
+background:“none”,border:“none”,color:active?“var(–blue)”:“var(–t2)”,flex:1,
+fontSize:9,fontWeight:active?700:500,position:“relative”}}>
+<SVG n={t.icon} s={18} c={active?“var(–blue)”:“var(–t2)”}/>
+<span>{t.label}</span>
+{badge>0&&<span style={{position:“absolute”,top:4,right:“calc(50% - 16px)”,width:7,height:7,
+borderRadius:“50%”,background:“var(–red)”}}/>}
+</button>
+):(
+<button onClick={()=>setTab(t.id)} style={{
+display:“flex”,alignItems:“center”,gap:9,padding:“8px 10px”,
+background:active?“rgba(59,126,248,.12)”:“transparent”,
+color:active?“var(–blue)”:“var(–t2)”,border:“none”,borderRadius:8,
+fontSize:13,fontWeight:active?600:400,width:“100%”,cursor:“pointer”,
+borderLeft:`2px solid ${active?"var(--blue)":"transparent"}`,transition:“all .12s”}}
+onMouseEnter={e=>{if(!active){e.currentTarget.style.background=“var(–s2)”;e.currentTarget.style.color=“var(–t1)”}}}
+onMouseLeave={e=>{if(!active){e.currentTarget.style.background=“transparent”;e.currentTarget.style.color=“var(–t2)”}}}>
+<SVG n={t.icon} s={15}/>
+<span style={{flex:1,textAlign:“left”}}>{t.label}</span>
+{badge>0&&<span style={{background:“var(–red)”,color:”#fff”,borderRadius:99,
+fontSize:10,fontWeight:700,padding:“1px 6px”,minWidth:18,textAlign:“center”}}>{badge}</span>}
+</button>
+);
+};
+
+return(
+<>
+<style>{CSS}</style>
+{/* Root dark wrapper — overrides host iframe white background */}
+<div style={{position:“fixed”,inset:0,background:“var(–bg)”,zIndex:-1}}/>
+{/* BG accents */}
+<div id=“app-bg” style={{position:“fixed”,inset:0,pointerEvents:“none”,zIndex:0,overflow:“hidden”}}>
+<div style={{position:“absolute”,top:-300,left:-200,width:600,height:600,borderRadius:“50%”,
+background:“radial-gradient(circle,rgba(59,126,248,.06),transparent 65%)”}}/>
+<div style={{position:“absolute”,bottom:-200,right:-150,width:500,height:500,borderRadius:“50%”,
+background:“radial-gradient(circle,rgba(123,92,245,.04),transparent 65%)”}}/>
+</div>
+{/* Print portal — shown only via @media print when PrintOverlay mounts */}
+<div id="print-doc"/>
+
+```
+  <div id="app-shell" style={{display:"flex",minHeight:"100vh",position:"relative",zIndex:1,overflow:"hidden"}}>
+
+    {/* Desktop sidebar */}
+    <nav id="sidebar" style={{width:"var(--nav)",background:"var(--s0)",
+      borderRight:"1px solid var(--b0)",display:"flex",flexDirection:"column",
+      flexShrink:0,position:"sticky",top:0,height:"100vh",padding:"0 10px"}}>
+      <div style={{padding:"22px 10px 16px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+          <span style={{width:6,height:6,borderRadius:"50%",background:"var(--teal)",
+            display:"inline-block",animation:"pulse 2s ease-in-out infinite"}}/>
+          <span style={{fontSize:10,fontWeight:600,color:"var(--teal)",letterSpacing:".08em",textTransform:"uppercase"}}>Online</span>
+        </div>
+        <div style={{fontSize:17,fontWeight:800,color:"var(--t0)",letterSpacing:"-.025em"}}>Дистрибьюция</div>
+        <div style={{fontSize:11,color:"var(--t2)",marginTop:2}}>Астана · 2026</div>
+        {alerts>0&&<div style={{marginTop:10}}><Chip c="var(--red)" sm><SVG n="alert" s={10}/> {alerts} позиций</Chip></div>}
+      </div>
+      <Divider/>
+      <div style={{flex:1,padding:"10px 0",display:"flex",flexDirection:"column",gap:2,overflowY:"auto"}}>
+        {TABS.map(t=><NavItem key={t.id} t={t}/>)}
+      </div>
+      <Divider/>
+      <div style={{padding:"12px 10px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:32,height:32,borderRadius:8,background:"rgba(59,126,248,.15)",
+            display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid rgba(59,126,248,.2)"}}>
+            <SVG n="user" s={15} c="var(--blue)"/>
+          </div>
+          <div>
+            <div style={{fontSize:13,fontWeight:600,color:"var(--t0)"}}>Елнур</div>
+            <div style={{fontSize:10,color:"var(--t3)"}}>Дистрибьютор</div>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    {/* Mobile top bar */}
+    <div id="mob-bar" style={{position:"fixed",top:0,left:0,right:0,zIndex:100,
+      background:"rgba(13,17,23,.94)",backdropFilter:"blur(14px)",
+      borderBottom:"1px solid var(--b0)",padding:"12px 16px",
+      display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      <div>
+        <div style={{fontSize:15,fontWeight:800,color:"var(--t0)",letterSpacing:"-.02em"}}>Дистрибьюция</div>
+        <div style={{fontSize:10,color:"var(--t2)"}}>Астана · 2026</div>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        {alerts>0&&<Chip c="var(--red)" sm>{alerts}</Chip>}
+        <span style={{width:6,height:6,borderRadius:"50%",background:"var(--teal)",
+          display:"inline-block",animation:"pulse 2s ease-in-out infinite"}}/>
+      </div>
+    </div>
+
+    {/* Main */}
+    <main id="main" style={{flex:1,padding:"28px 28px 48px",overflowY:"auto",overflowX:"hidden",maxWidth:1060,minWidth:0}}>
+      {screens[tab]}
+    </main>
+
+    {/* Mobile bottom nav */}
+    <div id="mob-nav" style={{position:"fixed",bottom:0,left:0,right:0,zIndex:100,
+      background:"rgba(13,17,23,.96)",backdropFilter:"blur(14px)",
+      borderTop:"1px solid var(--b1)",display:"flex",overflowX:"auto",
+      paddingBottom:"env(safe-area-inset-bottom,0)"}}>
+      {TABS.map(t=><NavItem key={t.id} t={t} mobile/>)}
+    </div>
+  </div>
+</>
+```
+
+);
+}
